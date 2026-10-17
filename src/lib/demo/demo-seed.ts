@@ -1,5 +1,4 @@
-import path from "node:path";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@prisma/client";
 import { createHash } from "node:crypto";
 import { DEMO_ABHA_NUMBER, DEMO_ACCOUNT_EMAIL, DEMO_ACCOUNT_NAME } from "./account";
 
@@ -33,10 +32,17 @@ type LabSeed = {
 };
 
 export async function seedDemoAccount(prisma: PrismaClient) {
-  console.log("[demo] seeding Personal Health Copilot demo data");
+  // A transaction-scoped lock serializes concurrent first logins across instances.
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(74219301)`;
+    return seedDemoData(tx);
+  }, { timeout: 60000, maxWait: 15000 });
+}
 
-  // Idempotent: wipe the demo account (never touching other accounts).
-  await prisma.user.deleteMany({ where: { email: DEMO_EMAIL } });
+async function seedDemoData(prisma: Prisma.TransactionClient) {
+  const existing = await prisma.user.findUnique({ where: { email: DEMO_EMAIL } });
+  if (existing) return { existing: true };
+
 
   const user = await prisma.user.create({
     data: {
@@ -666,16 +672,7 @@ export async function seedDemoAccount(prisma: PrismaClient) {
     const pairKey = `${first}|${second}`;
     await prisma.drugInteraction.upsert({
       where: { pairKey },
-      update: {
-        medicineA: first,
-        medicineB: second,
-        severity: interaction.severity,
-        description: interaction.description,
-        descriptionHi: interaction.descriptionHi,
-        action: interaction.action,
-        actionHi: interaction.actionHi,
-        source: "DEMO_DATASET",
-      },
+      update: {}, // Never overwrite curated production interaction data.
       create: {
         pairKey,
         medicineA: first,

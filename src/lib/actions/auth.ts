@@ -123,7 +123,7 @@ export async function deleteAccountAction(_prevState: { ok: boolean; error?: str
   const parsed = deleteDataSchema.safeParse({ confirm: String(formData.get("confirm") ?? "").trim() });
   if (!parsed.success) return { ok: false, error: "CONFIRM_REQUIRED" };
 
-  // Remove uploaded files from disk before deleting the rows that point at them.
+  // Remove private uploaded objects before deleting the rows that point at them.
   const files = await prisma.healthRecord.findMany({
     where: { profile: { userId: user.id }, filePath: { not: null } },
     select: { filePath: true },

@@ -7,9 +7,9 @@ document says in everyday English or Hindi, tracks how your values are trending,
 in order, checks your medicine list for interactions, and lets you ask questions about **your own
 records** — with no doctor's-visit jargon and no medical advice.
 
-This is a **working prototype**, not a static design: every screen reads and writes a real SQLite
+This is a **working prototype**, not a static design: every screen reads and writes a real PostgreSQL
 database through typed Prisma queries and server actions. The OCR and AI layers are **deterministic
-built-in demo providers**, so the whole product runs offline with zero API keys, and both are designed
+built-in demo providers**, so the AI/OCR demo logic runs with zero paid API keys, and both are designed
 to be swapped for production services without touching the UI (see
 [Replacing mock OCR](#how-to-replace-mock-ocr-with-production-ocr) and
 [Replacing mock AI](#how-to-replace-mock-ai-with-production-ai)).
@@ -43,26 +43,23 @@ to be swapped for production services without touching the UI (see
 
 ## Try it in 60 seconds
 
-Requirements: **Node.js 20.12+** (the tooling uses `process.loadEnvFile`) and npm. Then:
+Requirements: **Node.js 22**, npm, PostgreSQL and a private S3-compatible bucket.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for provider setup and the release checklist.
 
 ```bash
-npm install      # installs deps, runs `prisma generate`
-npm run dev      # first run auto-creates .env, the SQLite schema and the demo data
+cp .env.example .env
+# Replace placeholders with database/storage credentials and a generated SESSION_SECRET.
+npm ci
+npm run check:env
+npm run setup       # generate + migrate deploy + non-destructive demo seed
+npm run dev
 ```
 
-Open <http://localhost:3000> and <https://3000-i3ijb4qzgq58b4aeqd5m3.e2b.app> press **“Try Interactive Demo”** (or **“Continue with Demo
-Account”** on `/login`). One tap signs you in as the seeded demo patient — no sign-up, no keys.
+Open <http://localhost:3000> and press **“Try Interactive Demo”**.
+Dev/build/start never automatically reset or seed the database. Demo sign-in safely
+initializes fictional data on demand if the demo account does not exist.
 
-`npm run dev` runs a `predev` step (`scripts/dev-setup.mjs`) that copies `.env.example` → `.env`,
-applies the Prisma schema and seeds fictional demo data, but only when they are missing. It is
-idempotent and never blocks the server; you can also do it explicitly:
-
-```bash
-npm run setup    # prisma generate + db push + seed
-npm run typecheck
-```
-
-**Demo credentials** (all data is fictional and stored only on your machine):
+**Demo credentials** (all data is fictional and stored in your configured database):
 
 | Field | Value |
 | --- | --- |
@@ -140,7 +137,7 @@ Deliberately ordered so each step builds on the previous one. ~15 seconds per st
 | UI primitives | **shadcn/ui-style local components** (`src/components/ui/*`) on Radix | Full control of focus/ARIA; no opaque dependency |
 | Icons | **lucide-react** | |
 | Charts | **recharts** | Accessible SVG line/area charts with `role="img"` + text summaries |
-| Database | **Prisma 6 + SQLite** via `@prisma/adapter-better-sqlite3` | Zero-config local file; the adapter means no native engine binary to download |
+| Database | **Prisma 6 + PostgreSQL** via `@prisma/adapter-pg` | Persistent managed database; WASM engine and a small connection pool |
 | Validation | **Zod 4** (`src/lib/validation.ts`) | Every write path, form and provider payload |
 | Toasts | **sonner** | Announces action results to screen readers too |
 | PWA | `src/app/manifest.ts`, `public/icon.svg`, `public/icon-maskable.svg` | Installable, `theme-color`, no service-worker caching of medical data |
@@ -179,10 +176,10 @@ Deliberately ordered so each step builds on the previous one. ~15 seconds per st
 
 ```
 prisma/
-  schema.prisma          # 13 models, SQLite-safe (string “enums”), FHIR-mapping notes
+  schema.prisma          # 13 models, PostgreSQL (string “enums”), FHIR-mapping notes
   seed.ts                # → src/lib/demo/demo-seed.ts (idempotent, fictional data)
 scripts/
-  dev-setup.mjs          # first-run .env + schema + seed, wired as `predev`
+  check-env.mjs          # validates required deployment configuration
 src/
   app/
     layout.tsx           # reads preferences server-side → <html lang> + a11y classes (no flash)
@@ -330,7 +327,7 @@ so records, medicines, trends, chats and exports never mix between people.
 `DoseLog` + `HealthMetric`; plus `ChatMessage`, `DrugInteraction`, `UserPreferences`, `Session`,
 `Consent`, `AuditLog`.
 
-SQLite has no native enums, so state values are `String` columns whose allowed values live in
+State values remain `String` columns whose allowed values live in
 `src/types/domain.ts` and are enforced by Zod at every write. JSON-ish fields (`diagnosisTerms`,
 `corrections`, `aiSummary`) are stored as JSON strings and parsed defensively
 (`safeJsonArray`, `parseSummarySections`, `parseCorrectionCount`).
@@ -345,15 +342,16 @@ values.
 
 ## Configuration
 
-Copy `.env.example` → `.env` (the first `npm run dev` does it for you). Every value has a working default,
-so the file is optional for the demo.
+Copy `.env.example` → `.env` and replace placeholders. Database, private storage and a
+secure session secret are required; paid AI/OCR credentials are optional.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | `file:./prisma/dev.db` | SQLite file (resolved from the project root) |
-| `SESSION_SECRET` | dev placeholder | Session token hashing — **change in production** |
-| `UPLOAD_DIR` | `./data/uploads` | Document storage, deliberately outside `public/` |
-| `MAX_UPLOAD_MB` / `NEXT_PUBLIC_MAX_UPLOAD_MB` | `10` | Server limit and client pre-flight check |
+| `DATABASE_URL` / `DIRECT_URL` | required / optional | Pooled runtime / direct CLI PostgreSQL URL |
+| `SESSION_SECRET` | required | Generate with `openssl rand -base64 48` |
+| `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | required | Private persistent document storage |
+| `S3_ENDPOINT`, `S3_FORCE_PATH_STYLE` | optional | S3-compatible endpoint and addressing mode |
+| `NEXT_PUBLIC_MAX_UPLOAD_MB` | `4` | Shared client/server limit, capped at 4 MB for Vercel |
 | `AI_PROVIDER` | `mock` | `mock` \| `openai` \| `azure-openai` \| `gemini` |
 | `OPENAI_API_KEY` `OPENAI_BASE_URL` `OPENAI_MODEL` | empty | Required for `openai` (any OpenAI-compatible endpoint) |
 | `GEMINI_API_KEY` `GEMINI_MODEL` | empty | Required for `gemini` |
@@ -374,12 +372,14 @@ never implies a real model or a live ABDM connection when there isn't one.
 
 | Script | What it does |
 | --- | --- |
-| `npm run dev` | `predev` first-run setup, then `next dev` (bind `0.0.0.0` with `--hostname 0.0.0.0`) |
+| `npm run dev` | `next dev` (no automatic data changes) (bind `0.0.0.0` with `--hostname 0.0.0.0`) |
 | `npm run build` | `prisma generate && next build` |
 | `npm start` | `next start` (production) |
 | `npm run typecheck` | `tsc --noEmit` — **0 errors is the bar** |
-| `npm run setup` | generate + `db push` + seed |
-| `npm run db:push` / `db:seed` / `db:reset` / `db:studio` | schema, seed, wipe-and-reseed, Prisma Studio |
+| `npm run setup` | generate + `migrate deploy` + non-destructive seed |
+| `npm run db:migrate` / `db:seed` / `db:studio` | deploy migrations, initialize demo if absent, Prisma Studio |
+| `npm test` | deployment unit tests; optional DB/HTTP integration tests (see deployment guide) |
+| `npm run vercel-build` | validate configuration + generate + production build |
 
 ---
 
@@ -401,7 +401,7 @@ Stated plainly so nobody demos this as something it is not:
   Aadhaar or biometric verification, and no password hashing to a real IdP.
 - **Browser tab titles stay English** — each page sets `metadata.title` once; the visible UI is fully
   localised, but `<title>` is not (a mechanical `generateMetadata` change per page if you want it).
-- Single-node SQLite, no queue/retry for OCR jobs, no push notifications (the “reminders” list is derived
+- No queue/retry for OCR jobs, no push notifications (the “reminders” list is derived
   from dose slots, not an alarm), and no clinical validation of the seeded values (they are fictional).
 
 ---
@@ -629,78 +629,10 @@ Budget the certification work at weeks, not hours; the UI layer is the easy part
 
 ## How to deploy this application
 
-### A. Vercel (fastest, but SQLite cannot be used)
-
-1. **Swap the database for Postgres** (Neon/Supabase/RDS):
-   - `prisma/schema.prisma` → `provider = "postgresql"`; `DATABASE_URL` = connection string.
-   - Delete the SQLite driver adapter in `src/lib/database/client.ts` and `prisma.config.ts`
-     (`new PrismaClient({ adapter })` → plain client, or `@prisma/adapter-pg`), and change
-     `generator client { engineType = "client" }` → remove it to use the default engine.
-   - Re-create the schema as a migration: `npx prisma migrate dev --name init`, then
-     `npx prisma migrate deploy` in the release step (`prisma db push` is for local/demo only).
-   - `String` columns that hold JSON keep working; optionally promote them to `Json` + `@db.Text`.
-   - The seed is dev-only — exclude `prisma/seed.ts` from production builds, or gate it on
-     `NODE_ENV !== "production"`.
-2. **Move uploads to object storage.** `data/uploads` is ephemeral on Vercel: implement
-   `saveUploadedFile` / `readUploadedFile` / `removeUploadedFile` in `src/lib/uploads/storage.ts` against Vercel
-   Blob or S3/R2 (presigned PUT from the client, and keep `/api/records/[id]/file` as the authorisation proxy so
-   the bucket ACL stays private). Bump
-   `MAX_UPLOAD_MB` + `experimental.serverActions.bodySizeLimit` together, and offload OCR to a queue or
-   `waitUntil()` — serverless functions time out on long OCR jobs.
-3. Env vars: everything from `.env.example` in Project Settings, with a **real**
-   `SESSION_SECRET` (≥32 random bytes), and `NEXT_PUBLIC_MAX_UPLOAD_MB` matching the server limit.
-4. Build command is already right: `npm run build` (`prisma generate && next build`). Add
-   `NEXT_TELEMETRY_DISABLED=1`, verify `npm run typecheck` in CI, and set the cookie `secure`/`sameSite`
-   attributes for HTTPS (in `src/lib/auth/session.ts`).
-5. Check `next.config.ts` — `allowedDevOrigins` is dev-only, so no change; do add security headers
-   (`Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`,
-   `Permissions-Policy: microphone=(), camera=(self)` for the camera capture), and `Cache-Control`
-   hardening is already applied on the file route.
-
-### B. Long-lived Node or Docker (keeps SQLite, simplest for a pilot)
-
-```dockerfile
-FROM node:22-slim AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-
-FROM node:22-slim AS build
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-RUN npx prisma generate && npm run build
-
-FROM node:22-slim AS run
-WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/.next ./.next
-COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/package.json /app/prisma.config.ts ./
-COPY --from=build /app/public ./public
-RUN mkdir -p /data/uploads
-CMD ["sh", "-c", "npx prisma db push --skip-generate && npm start -- --hostname 0.0.0.0 --port ${PORT:-3000}"]
-```
-
-```bash
-docker run -p 3000:3000 \
-  -e SESSION_SECRET="$(openssl rand -base64 48)" \
-  -e DATABASE_URL="file:/app/prisma/prod.db" \
-  -e UPLOAD_DIR=/data/uploads \
-  -v phc-uploads:/data/uploads \
-  health-copilot
-```
-
-- **Mount the SQLite file and `UPLOAD_DIR` on durable volumes** — they are the whole database; back both
-  up together (`sqlite3 .backup` + a tar of uploads) so an uploaded PDF and its row never drift apart.
-- Run `npx prisma migrate deploy` in the release step once you have a real migration history; put Nginx/
-  Caddy in front for TLS, keep `next start --hostname 0.0.0.0`, and cap request bodies to
-  `MAX_UPLOAD_MB` at the proxy too.
-- Managed-VM alternatives that also keep SQLite: Railway, Fly.io (attach a volume), Render, or a small
-  EC2/DigitalOcean box behind Cloudflare with the auth endpoints rate-limited.
-- One process per DB writer: SQLite serialises writes, so keep `next start` single-instance (or move to
-  Postgres before scaling horizontally).
+The PostgreSQL and private S3-compatible storage implementation is included.
+Follow **[DEPLOYMENT.md](DEPLOYMENT.md)** for database and bucket setup, environment
+variables, migration commands, tests, existing SQLite data handling and manual verification.
+Do not run migrations or seed automatically in every Vercel build. Use a controlled release step.
 
 ### C. Pre-flight checklist for any real deployment
 
@@ -721,13 +653,13 @@ docker run -p 3000:3000 \
 
 | Symptom | Fix |
 | --- | --- |
-| Pages 500 with `no such table: User` | `npm run setup` (schema + seed). `predev` only seeds when the DB file is missing/empty. |
-| `better-sqlite3` node-gyp failure on install | Needs Python + a C++ toolchain and Node headers: `apt-get install -y python3 make g++` and, in containers without headers, `npm_config_nodedir=/usr/local npm install`. |
+| Missing relation/table | Check the database environment, then run `npm run db:migrate`. Builds do not initialize tables. |
+| Database connection errors | Use a pooled PostgreSQL URL for runtime, direct URL for CLI, check TLS and network access. |
 | `UnhandledSchemeError: Reading from "node:crypto"` | A client component imported a server-only module (`demo-seed.ts`, `uploads/storage.ts`). Import the client-safe twins (`src/lib/demo/account.ts`, `src/lib/uploads/limits.ts`) instead. |
 | Prisma cannot download engine binaries (locked-down network) | Already handled: `engineType = "client"` + `engine: "js"` in `prisma.config.ts`. Keep `url = env("DATABASE_URL")` — the “url will NOT be used” warning from the CLI is expected with driver adapters. |
 | `PRISMA_SKIP_POSTINSTALL_GENERATE=1 npm install`, then 500s | Run `npx prisma generate` afterwards — skipping the postinstall skips codegen. |
 | Hindi text looks like Latin characters | Font fallback: the root layout loads a Devanagari-capable system stack; on minimal Linux images install `fonts-noto-core`. |
-| Uploaded file not visible after refresh | It must live under `UPLOAD_DIR` and be owned by the active profile's user — check the ownership branch in `/api/records/[id]/file`; demo records intentionally have no file (404 with a friendly note). |
+| Uploaded file not visible after refresh | It must exist in the private bucket and be owned by the signed-in user — check the ownership branch in `/api/records/[id]/file`; demo records intentionally have no file (404 with a friendly note). |
 | Charts blank in production | Recharts needs a sized container; `TrendChart` uses `ResponsiveContainer` with a fixed `height` — don't drop it. |
 
 ---

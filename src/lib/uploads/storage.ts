@@ -1,90 +1,49 @@
-import { mkdir, writeFile, readFile, unlink, stat } from "node:fs/promises";
-import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { MAX_UPLOAD_BYTES } from "./limits";
-
-/**
- * Uploaded-file storage.
- *
- * Files are written OUTSIDE the web root (default ./data/uploads) and are only
- * ever streamed back through /api/records/[id]/file, which checks profile
- * ownership first. Nothing in this folder is publicly addressable, and file
- * names are randomised so an uploaded prescription cannot be guessed by URL.
- *
- * PRODUCTION: replace this module with object storage (S3/GCS) using
- * server-side encryption, customer-managed keys, signed short-lived URLs and
- * an audit trail per access — see the README deployment section.
- */
-
-// Upload limits and MIME rules are also needed by the browser-side dropzone,
-// so they live in a client-safe module and are re-exported here for the server.
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { MAX_UPLOAD_BYTES, isAllowedType } from "./limits";
 export { ALLOWED_MIME_TYPES, MAX_UPLOAD_BYTES, formatBytes, isAllowedType } from "./limits";
 
-export function uploadRoot(): string {
-  const configured = process.env.UPLOAD_DIR ?? "./data/uploads";
-  return path.isAbsolute(configured) ? configured : path.join(process.cwd(), configured);
+function storage() {
+  const { S3_BUCKET: bucket, S3_REGION: region, S3_ENDPOINT: endpoint, S3_ACCESS_KEY_ID: accessKeyId, S3_SECRET_ACCESS_KEY: secretAccessKey } = process.env;
+  if (!bucket || !region || !accessKeyId || !secretAccessKey) throw new Error("STORAGE_NOT_CONFIGURED");
+  const client = new S3Client({ region, endpoint: endpoint || undefined,
+    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+    credentials: { accessKeyId, secretAccessKey } });
+  return { client, bucket };
 }
 
-function extensionFor(fileName: string, mimeType: string): string {
-  const fromName = path.extname(fileName).toLowerCase();
-  if (fromName && fromName.length <= 5) return fromName;
-  switch (mimeType) {
-    case "application/pdf":
-      return ".pdf";
-    case "image/png":
-      return ".png";
-    case "image/webp":
-      return ".webp";
-    case "image/heic":
-    case "image/heif":
-      return ".heic";
-    default:
-      return ".jpg";
-  }
+/** Only opaque keys generated here may be used; never accept a URL or disk path. */
+export function validateObjectKey(key: string): string {
+  if (!/^[a-zA-Z0-9_-]+\/[a-f0-9-]{36}\.(pdf|png|webp|heic|jpg)$/.test(key)) throw new Error("INVALID_PATH");
+  return key;
 }
+export type StoredFile = { relativePath: string; size: number };
 
-export type StoredFile = {
-  /** Path relative to the upload root — stored in the database. */
-  relativePath: string;
-  absolutePath: string;
-  size: number;
-};
-
-export async function saveUploadedFile(
-  buffer: Buffer,
-  originalName: string,
-  mimeType: string,
-  profileId: string,
-): Promise<StoredFile> {
-  const directory = path.join(uploadRoot(), profileId);
-  await mkdir(directory, { recursive: true });
-
-  const fileName = `${Date.now()}-${randomUUID()}${extensionFor(originalName, mimeType)}`;
-  const absolutePath = path.join(directory, fileName);
-  await writeFile(absolutePath, buffer, { mode: 0o600 });
-
-  const info = await stat(absolutePath);
-  return {
-    relativePath: path.join(profileId, fileName),
-    absolutePath,
-    size: info.size,
-  };
-}
-
-export async function readUploadedFile(relativePath: string): Promise<Buffer> {
-  const absolute = path.join(uploadRoot(), relativePath);
-  // Guard against path traversal in a stored value.
-  if (!absolute.startsWith(uploadRoot())) throw new Error("INVALID_PATH");
-  return readFile(absolute);
-}
-
-export async function removeUploadedFile(relativePath: string): Promise<void> {
+export async function saveUploadedFile(buffer: Buffer, originalName: string, mimeType: string, profileId: string): Promise<StoredFile> {
+  if (!buffer.length || buffer.length > MAX_UPLOAD_BYTES || !isAllowedType(mimeType, originalName)) throw new Error("INVALID_FILE");
+  const extension = mimeType === "application/pdf" ? "pdf" : mimeType === "image/png" ? "png" : mimeType === "image/webp" ? "webp" : /heic|heif/.test(mimeType) ? "heic" : "jpg";
+  const key = validateObjectKey(`${profileId}/${randomUUID()}.${extension}`);
+  const { client, bucket } = storage();
   try {
-    const absolute = path.join(uploadRoot(), relativePath);
-    if (!absolute.startsWith(uploadRoot())) return;
-    await unlink(absolute);
-  } catch {
-    // A missing file must not block account deletion.
-  }
+    // Bucket is private; do not set a public ACL or return an object URL.
+    await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: mimeType, CacheControl: "private, no-store" }));
+    return { relativePath: key, size: buffer.length };
+  } finally { client.destroy(); }
 }
-
+export async function readUploadedFile(key: string): Promise<Buffer> {
+  validateObjectKey(key);
+  const { client, bucket } = storage();
+  try {
+    const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    if (!result.Body || (result.ContentLength ?? 0) > MAX_UPLOAD_BYTES) throw new Error("FILE_UNAVAILABLE");
+    return Buffer.from(await result.Body.transformToByteArray());
+  } finally { client.destroy(); }
+}
+export async function removeUploadedFile(key: string): Promise<void> {
+  validateObjectKey(key);
+  const { client, bucket } = storage();
+  try {
+    // S3 deletion is idempotent for missing keys; propagate outages/permission failures.
+    await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  } finally { client.destroy(); }
+}

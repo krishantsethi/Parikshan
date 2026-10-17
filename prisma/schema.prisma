@@ -1,9 +1,6 @@
 // Personal Health Copilot — data model
 // ---------------------------------------------------------------------------
-// NOTE ON SQLITE + PRISMA ENUMS
-// SQLite does not support native enums, so values that would normally be enums
-// are stored as strings. The allowed values and their TypeScript unions live in
-// `src/types/domain.ts` and are enforced with Zod at every write boundary.
+// Domain values remain strings, validated with Zod at write boundaries.
 //
 // FHIR / ABDM READINESS (see also src/lib/fhir/mappers.ts)
 //   User + HealthProfile  -> FHIR Patient
@@ -23,7 +20,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

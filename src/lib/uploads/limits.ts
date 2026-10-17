@@ -6,7 +6,7 @@
  * instead of in `storage.ts`, which touches the filesystem and `node:crypto`.
  */
 
-export const MAX_UPLOAD_BYTES = Number(process.env.MAX_UPLOAD_MB ?? 10) * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = Math.min(4, Math.max(1, Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB) || 4)) * 1024 * 1024;
 
 export const ALLOWED_MIME_TYPES = [
   "image/jpeg",

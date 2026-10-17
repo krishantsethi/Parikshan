@@ -47,6 +47,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       },
     });
   } catch {
-    return NextResponse.json({ error: "FILE_UNAVAILABLE" }, { status: 404 });
+    return NextResponse.json({ error: "FILE_UNAVAILABLE" }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
   }
 }

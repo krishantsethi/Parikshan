@@ -1,3 +1,4 @@
+import { sessionSecret, sessionCookieOptions } from "./config";
 import { randomBytes, createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -19,7 +20,7 @@ export const SESSION_COOKIE = "phc_session";
 const SESSION_TTL_DAYS = 30;
 
 function hashToken(token: string): string {
-  const secret = process.env.SESSION_SECRET ?? "dev-only-secret";
+  const secret = sessionSecret();
   return createHash("sha256").update(`${token}:${secret}`).digest("hex");
 }
 
@@ -32,13 +33,7 @@ export async function createSession(userId: string): Promise<void> {
   });
 
   const jar = await cookies();
-  jar.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    expires: expiresAt,
-  });
+  jar.set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
 }
 
 export type SessionUser = {
@@ -119,5 +114,5 @@ export async function destroySession(): Promise<void> {
       .deleteMany({ where: { tokenHash: hashToken(token) } })
       .catch(() => undefined);
   }
-  jar.delete(SESSION_COOKIE);
+  jar.set(SESSION_COOKIE, "", sessionCookieOptions(new Date(0)));
 }

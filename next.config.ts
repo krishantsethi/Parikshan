@@ -5,10 +5,10 @@ const nextConfig: NextConfig = {
   // Medical documents can be a few MB (photos of prescriptions / PDFs).
   experimental: {
     serverActions: {
-      bodySizeLimit: "12mb",
+      bodySizeLimit: "4.5mb",
     },
   },
-  // Uploaded files are stored OUTSIDE the public folder and streamed through an
+  // Uploaded files are stored in a private object bucket and streamed through an
   // ownership-checked route handler (/api/records/[id]/file), so medical
   // documents are never publicly addressable.
   serverExternalPackages: ["@prisma/client"],

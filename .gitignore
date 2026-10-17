@@ -19,9 +19,9 @@ prisma/*.db
 prisma/*.db-journal
 data/uploads/
 
-# env — only .env.example is committed; `predev` recreates .env from it
-.env
-.env*.local
+# env — commit only the safe template
+.env*
+!.env.example
 
 # misc
 .DS_Store
