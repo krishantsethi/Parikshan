@@ -3,6 +3,7 @@ import { findGlossaryEntry } from "@/lib/medical/glossary";
 import { getMetric, metricKeyForTestName } from "@/lib/health/metrics";
 import { formatDate } from "@/lib/i18n/format";
 import { translate } from "@/lib/i18n";
+import { isFollowUpQuestion } from "@/lib/voice/transcript";
 import { notFoundSentence } from "./prompt";
 import type {
   AIContext,
@@ -35,9 +36,40 @@ function toSources(records: AIContextRecord[]): ChatSource[] {
   }));
 }
 
-function formatValue(value: number, unit: string | null, language: Language): string {
-  const rounded = Number.isInteger(value) ? String(value) : value.toFixed(1);
+function formatValue(
+  value: number,
+  unit: string | null,
+  language: Language,
+  /** The exact string printed on the report, when it is available. */
+  displayValue?: string | null,
+): string {
+  const rounded =
+    displayValue?.trim() ||
+    (Number.isInteger(value) ? String(value) : value.toFixed(1));
   return unit ? `${rounded} ${unit}` : rounded;
+}
+
+/**
+ * Metrics are stored as floats, which loses trailing precision ("11.0" → 11).
+ * When the source lab row is in the same context, quote its original string so
+ * the spoken answer matches what the report actually printed.
+ */
+function reportValueFor(
+  context: AIContext,
+  metricKey: string | null | undefined,
+  sourceRecordId: string | null | undefined,
+  value: number,
+): string | null {
+  if (!metricKey) return null;
+  for (const record of context.records) {
+    if (sourceRecordId && record.id !== sourceRecordId) continue;
+    for (const lab of record.labValues) {
+      if (lab.metricKey === metricKey && lab.numericValue === value && lab.value.trim()) {
+        return lab.value.trim();
+      }
+    }
+  }
+  return null;
 }
 
 const STATUS_TEXT: Record<string, { en: string; hi: string }> = {
@@ -92,6 +124,27 @@ function detectMetric(question: string): { metricKey: string | null; label: stri
   // Handle "blood pressure" as the composite metric.
   if (/blood pressure|\bbp\b|रक्तचाप/i.test(question)) return { metricKey: "bp_systolic", label: "Blood Pressure" };
   return { metricKey: null, label: null };
+}
+
+/**
+ * Follow-up resolution.
+ *
+ * "And before that?" has no metric of its own. If the current question looks
+ * like a follow-up, the most recent user question is used ONLY to find the
+ * metric — never to widen the record scope. The context itself is still loaded
+ * from the signed-in profile on every request.
+ */
+function resolveMetric(question: string, history?: QuestionRequest["history"]) {
+  const direct = detectMetric(question);
+  if (direct.metricKey || !history?.length || !isFollowUpQuestion(question)) return direct;
+
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const turn = history[index];
+    if (turn?.role !== "user") continue;
+    const inherited = detectMetric(turn.content);
+    if (inherited.metricKey) return inherited;
+  }
+  return direct;
 }
 
 // ── Answer builders ─────────────────────────────────────────────────────────
@@ -172,8 +225,17 @@ function answerLabLookup(
   const previous = sorted[sorted.length - 2];
   const label = latest.label || metric?.key || "Value";
 
+  const latestDisplay = reportValueFor(context, latest.metricKey ?? metricKey, latest.sourceRecordId, latest.value);
+  const previousDisplay = previous
+    ? reportValueFor(context, previous.metricKey ?? metricKey, previous.sourceRecordId, previous.value)
+    : null;
+  const latestText = formatValue(latest.value, latest.unit, language, latestDisplay);
+  const previousText = previous
+    ? formatValue(previous.value, previous.unit, language, previousDisplay)
+    : "";
+
   const lines = [
-    pick(language, `Your most recent ${label} was ${formatValue(latest.value, latest.unit, language)}.`, `आपका सबसे नया ${label} ${formatValue(latest.value, latest.unit, language)} था।`),
+    pick(language, `Your most recent ${label} was ${latestText}.`, `आपका सबसे नया ${label} ${latestText} था।`),
     `${pick(language, "From", "स्रोत")}: ${latest.sourceRecordTitle ?? "—"} (${formatDate(latest.recordedAt, language)})`,
   ];
 
@@ -181,15 +243,15 @@ function answerLabLookup(
     const delta = latest.value - previous.value;
     const direction =
       Math.abs(delta) < 0.05
-        ? pick(language, "about the same as", "लगभग वही जो")
+        ? pick(language, "about the same", "लगभग वही है")
         : delta > 0
-          ? pick(language, "higher than", "ज़्यादा है")
-          : pick(language, "lower than", "कम है");
+          ? pick(language, "higher", "ज़्यादा है")
+          : pick(language, "lower", "कम है");
     lines.push(
       pick(
         language,
-        `Compared with your previous report (${formatValue(previous.value, previous.unit, language)} on ${formatDate(previous.recordedAt, language)}) it is ${direction}.`,
-        `पिछली रिपोर्ट (${formatValue(previous.value, previous.unit, language)}, ${formatDate(previous.recordedAt, language)}) की तुलना में यह ${direction}।`,
+        `Compared with your previous report (${previousText} on ${formatDate(previous.recordedAt, language)}) it is ${direction}.`,
+        `पिछली रिपोर्ट (${previousText}, ${formatDate(previous.recordedAt, language)}) की तुलना में यह ${direction}।`,
       ),
     );
   }
@@ -201,8 +263,8 @@ function answerLabLookup(
     if (last && Math.abs(last.recordedAt.getTime() - latest.recordedAt.getTime()) < 86_400_000) {
       lines[0] = pick(
         language,
-        `Your most recent blood pressure was ${formatValue(latest.value, null, language)}/${formatValue(last.value, null, language)} mmHg.`,
-        `आपका सबसे नया रक्तचाप ${formatValue(latest.value, null, language)}/${formatValue(last.value, null, language)} mmHg था।`,
+        `Your most recent blood pressure was ${formatValue(latest.value, null, language, reportValueFor(context, "bp_systolic", latest.sourceRecordId, latest.value))}/${formatValue(last.value, null, language, reportValueFor(context, "bp_diastolic", last.sourceRecordId, last.value))} mmHg.`,
+        `आपका सबसे नया रक्तचाप ${formatValue(latest.value, null, language, reportValueFor(context, "bp_systolic", latest.sourceRecordId, latest.value))}/${formatValue(last.value, null, language, reportValueFor(context, "bp_diastolic", last.sourceRecordId, last.value))} mmHg था।`,
       );
     }
   }
@@ -230,8 +292,15 @@ function answerLabLookup(
   };
 }
 
-function answerTrend(context: AIContext, language: Language, question: string): QuestionResponse {
-  const { metricKey } = detectMetric(question);
+function answerTrend(
+  context: AIContext,
+  language: Language,
+  question: string,
+  inheritedMetricKey?: string | null,
+): QuestionResponse {
+  const { metricKey } = inheritedMetricKey
+    ? { metricKey: inheritedMetricKey }
+    : detectMetric(question);
   const candidates = metricKey
     ? [metricKey]
     : [...new Set(context.metrics.map((metric) => metric.metricKey))];
@@ -249,11 +318,13 @@ function answerTrend(context: AIContext, language: Language, question: string): 
     const delta = latest.value - previous.value;
     if (Math.abs(delta) < 0.05) continue;
     const label = latest.label;
+    const latestDisplay = reportValueFor(context, latest.metricKey, latest.sourceRecordId, latest.value);
+    const previousDisplay = reportValueFor(context, previous.metricKey, previous.sourceRecordId, previous.value);
     changed.push(
       pick(
         language,
-        `• ${label} ${delta > 0 ? "increased" : "decreased"} from ${formatValue(previous.value, previous.unit, language)} to ${formatValue(latest.value, latest.unit, language)} (${formatDate(previous.recordedAt, language)} → ${formatDate(latest.recordedAt, language)}).`,
-        `• ${label} ${delta > 0 ? "बढ़ा" : "घटा"}: ${formatValue(previous.value, previous.unit, language)} से ${formatValue(latest.value, latest.unit, language)} (${formatDate(previous.recordedAt, language)} → ${formatDate(latest.recordedAt, language)})।`,
+        `• ${label} ${delta > 0 ? "increased" : "decreased"} from ${formatValue(previous.value, previous.unit, language, previousDisplay)} to ${formatValue(latest.value, latest.unit, language, latestDisplay)} (${formatDate(previous.recordedAt, language)} → ${formatDate(latest.recordedAt, language)}).`,
+        `• ${label} ${delta > 0 ? "बढ़ा" : "घटा"}: ${formatValue(previous.value, previous.unit, language, previousDisplay)} से ${formatValue(latest.value, latest.unit, language, latestDisplay)} (${formatDate(previous.recordedAt, language)} → ${formatDate(latest.recordedAt, language)})।`,
       ),
     );
     for (const item of [latest, previous]) {
@@ -467,8 +538,8 @@ function buildSummary(context: AIContext, record: AIContextRecord): HealthSummar
     changes.push(
       pick(
         language,
-        `${value.testName} ${delta > 0 ? "increased" : "decreased"} from ${formatValue(previous.value, previous.unit, language)} to ${formatValue(value.numericValue, value.unit, language)} compared with your previous report.`,
-        `${value.testName} पिछली रिपोर्ट से ${delta > 0 ? "बढ़कर" : "घटकर"} ${formatValue(previous.value, previous.unit, language)} से ${formatValue(value.numericValue, value.unit, language)} हुआ।`,
+        `${value.testName} ${delta > 0 ? "increased" : "decreased"} from ${formatValue(previous.value, previous.unit, language)} to ${formatValue(value.numericValue, value.unit, language, value.value)} compared with your previous report.`,
+        `${value.testName} पिछली रिपोर्ट से ${delta > 0 ? "बढ़कर" : "घटकर"} ${formatValue(previous.value, previous.unit, language)} से ${formatValue(value.numericValue, value.unit, language, value.value)} हुआ।`,
       ),
     );
   }
@@ -619,8 +690,9 @@ export class MockHealthAIProvider implements HealthAIProvider {
   }
 
   async answerQuestion(request: QuestionRequest): Promise<QuestionResponse> {
-    const { context, question, language } = request;
+    const { context, question, language, history } = request;
     const intent = detectIntent(question);
+    const resolvedMetric = resolveMetric(question, history);
 
     if (!context.records.length) {
       return notFound(context, language, intent, question);
@@ -631,7 +703,7 @@ export class MockHealthAIProvider implements HealthAIProvider {
       case "medications_history":
         return answerMedicationsActive(context, language);
       case "trend":
-        return answerTrend(context, language, question);
+        return answerTrend(context, language, question, resolvedMetric.metricKey);
       case "last_upload":
         return answerLastUpload(context, language);
       case "explain_report":
@@ -643,7 +715,7 @@ export class MockHealthAIProvider implements HealthAIProvider {
       case "lab_lookup":
       case "unknown":
       default: {
-        const { metricKey } = detectMetric(question);
+        const { metricKey } = resolvedMetric;
         const hasMetricSeries = metricKey
           ? context.metrics.some((metric) => metric.metricKey === metricKey)
           : false;
@@ -688,4 +760,4 @@ export class MockHealthAIProvider implements HealthAIProvider {
   }
 }
 
-export const __testing = { detectIntent, detectMetric, buildSummary, notFound };
+export const __testing = { detectIntent, detectMetric, resolveMetric, buildSummary, notFound };

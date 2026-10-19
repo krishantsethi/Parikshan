@@ -99,7 +99,7 @@ export class GeminiHealthProvider implements HealthAIProvider {
   async answerQuestion(request: QuestionRequest): Promise<QuestionResponse> {
     const { context, question, language } = request;
     const raw = await this.generate(
-      buildQuestionPrompt({ question, contextJson: serializeContext(context), language }),
+      buildQuestionPrompt({ question, contextJson: serializeContext(context), language, history: request.history }),
     );
     const parsed = answerSchema.parse(JSON.parse(raw));
     return {

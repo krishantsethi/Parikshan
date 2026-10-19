@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { getActiveProfile } from "@/lib/auth/guards";
 import { getChatHistory, getTimelineRecords } from "@/lib/database/queries";
 import { activeAIProviderName, isMockAI } from "@/lib/ai";
+import { getVoicePublicConfig } from "@/lib/voice/config";
 import { createTranslator } from "@/lib/i18n";
 import type { Language } from "@/types/domain";
 
@@ -26,6 +27,7 @@ export default async function AssistantPage() {
   ]);
   const lang: Language = user.preferences?.language === "hi" ? "hi" : "en";
   const t = createTranslator(lang);
+  const voiceConfig = getVoicePublicConfig();
 
   return (
     <div className="space-y-5">
@@ -35,17 +37,22 @@ export default async function AssistantPage() {
         emoji="🤖"
       />
 
+      {/* Remount on profile switch so another person's transcript is never
+          carried over in client state. This also stops any active speech. */}
       <AIChat
+        key={profile.id}
         initialMessages={messages.map((message) => ({
           id: message.id,
           role: message.role,
           content: message.content,
           sources: message.sources,
           grounded: message.grounded,
+          intent: message.intent,
         }))}
         providerName={activeAIProviderName()}
         isMock={isMockAI()}
         recordCount={records.length}
+        voiceConfig={voiceConfig}
       />
     </div>
   );

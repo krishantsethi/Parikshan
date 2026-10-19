@@ -158,5 +158,3 @@ export async function updateProfileAction(
   revalidatePath("/", "layout");
   return { ok: true, profileId: profile.id };
 }
-
-export const profileStateHelpers = { defaultEmoji };

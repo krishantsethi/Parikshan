@@ -28,6 +28,7 @@ to be swapped for production services without touching the UI (see
 - [Safety, privacy and consent](#safety-privacy-and-consent)
 - [Accessibility and Easy Read Mode](#accessibility-and-easy-read-mode)
 - [Languages](#languages)
+- [Voice assistant](#voice-assistant)
 - [Family profiles, child mode and elder mode](#family-profiles-child-mode-and-elder-mode)
 - [Data model](#data-model)
 - [Configuration](#configuration)
@@ -60,6 +61,7 @@ idempotent and never blocks the server; you can also do it explicitly:
 ```bash
 npm run setup    # prisma generate + db push + seed
 npm run typecheck
+npm test         # voice assistant / grounding / authorization tests
 ```
 
 **Demo credentials** (all data is fictional and stored only on your machine):
@@ -91,11 +93,12 @@ interaction pairs — enough to make every screen meaningful on first load.
 | 5 | Medication management with daily dose tracking | `/medications` · `MedicationManager`, `DoseTracker` |
 | 6 | Drug–drug interaction detection | `/interactions` · `src/lib/interactions/*` |
 | 7 | Ask questions about your own records | `/assistant` · `AIChat` · `answerQuestionSafely()` |
-| 8 | English + Hindi throughout | `LanguageToggle`, `src/lib/i18n/dictionary.ts` (692 keys × 2, parity enforced by `tsc`) |
+| 8 | English + Hindi throughout | `LanguageToggle`, `src/lib/i18n/dictionary.ts` (813 keys × 2, parity enforced by `tsc`) |
 | 9 | Elderly / child accessibility (Easy Read, large text, high contrast, read-aloud) | `AccessibilityToggle`, `src/app/globals.css`, `ChildModeNotice` |
 | 10 | ABHA / FHIR-ready architecture | `src/lib/fhir/mappers.ts`, `src/lib/fhir/abha.ts`, `/api/export` |
 | 11 | Privacy, consent and audit trail | `Consent` + `AuditLog` models, `/api/records/[id]/file`, `/settings` |
 | 12 | Works on a phone (bottom nav) and desktop (sidebar), installable PWA | `AppShell`, `BottomNav`, `src/app/manifest.ts` |
+| 13 | Voice questions + spoken answers, English and Hindi, with visible transcript and failure states | `/assistant` · `VoiceAssistant` · `src/lib/voice/*` · `/api/voice/{transcribe,speak}` |
 
 Every screen also ships the required component set: `HealthMetricCard`, `MedicationCard`, `RecordCard`,
 `TimelineItem`, `UploadDropzone`, `AISummaryCard`, `AIChat`, `TrendChart`, `LanguageToggle`,
@@ -300,13 +303,77 @@ Reading is equally narrow — pages call typed helpers in `src/lib/database/quer
 
 ## Languages
 
-- One dictionary module (`src/lib/i18n/dictionary.ts`) with **692 EN keys and 692 HI keys**; `tsc` fails if
+- One dictionary module (`src/lib/i18n/dictionary.ts`) with **813 EN keys and 813 HI keys**; `tsc` fails if
   a key exists in one language only, so a missing translation is a compile error, not a UI bug.
 - `t("trends.count", { count })` for interpolation, with Intl number/date formatting per locale
   (`en-IN` / `hi-IN`, Latin digits so lab values stay readable and copyable).
 - Switching language updates `<html lang>`, persists the preference, and re-renders charts, dates and
   AI summaries (the demo AI answers in the requested language).
 - Documented terms come from `src/lib/medical/glossary.ts` in both languages.
+
+---
+
+## Voice assistant
+
+`/assistant` adds a microphone button beside the text box. Opening the panel does **not** request the
+microphone; pressing **Start listening** does. Typed and spoken questions use the same authenticated,
+profile-scoped assistant pipeline.
+
+**What works without any credentials (the default)**
+
+- Browser speech recognition (`SpeechRecognition` / `webkitSpeechRecognition`, most Chromium browsers and
+  Safari) and browser speech synthesis (`speechSynthesis`), preferring `en-IN` / `hi-IN` voices when installed.
+- Every state has visible text and a polite live region: idle, waiting for permission, listening,
+  processing, speaking, error, permission denied and unsupported browser.
+- Live interim transcript, completed transcript, stop-and-ask, interrupt, replay, mute and switch-to-text.
+  Mute is remembered in `localStorage`.
+- Failures handled explicitly: blocked permission, no microphone, microphone busy, empty recording, no
+  speech, unsupported browser, network failure, provider error, 30-second transcription timeout,
+  45-second recording limit, and backgrounding the tab (recording discarded, speech stopped).
+- Grounded answers list the report name, report date and the test, value and unit. Missing data returns an
+  explicit “not in your uploaded records” limitation instead of a number; low-confidence extraction,
+  ambiguous reports, missing source links, unverified values and provider fallback are shown as limitations.
+- Emergency phrases (chest pain, breathing difficulty, stroke signs, self-harm, overdose, anaphylaxis …)
+  escalate immediately to **112 / 108** before any model call. Destructive or sharing commands never execute
+  and ask for confirmation. Clinician-verification sentences are replaced with a disclaimer, and generated
+  numbers are checked against the profile's records and rejected when unsupported.
+- English and Hindi throughout, including controls, emergency text, limitations and spoken answers. Hindi
+  metric names (`हीमोग्लोबिन`, `ब्लड शुगर`, `रक्तचाप` …) resolve to the same records as their English names.
+
+**Server-side speech (optional, requires a key)**
+
+Set `VOICE_STT_PROVIDER=openai` and/or `VOICE_TTS_PROVIDER=openai`, then `VOICE_OPENAI_API_KEY` (or the
+existing `OPENAI_API_KEY`). `VOICE_OPENAI_BASE_URL` points at any OpenAI-compatible endpoint. STT uses
+`/audio/transcriptions` (`VOICE_STT_MODEL`, default `whisper-1`); TTS uses `/audio/speech`
+(`VOICE_TTS_MODEL`, default `tts-1`) with per-language voices (`VOICE_TTS_VOICE_EN` / `VOICE_TTS_VOICE_HI`,
+defaults `alloy` / `shimmer`). If a server provider is selected without a key, the app falls back to browser
+speech and says so in the UI. Provider keys never reach the browser, and the provider is not hard-coded in
+client code.
+
+**Security and privacy**
+
+- `/api/voice/transcribe` and `/api/voice/speak` require a session, reject cross-origin requests, apply a
+  per-user rate limit and enforce MIME/size limits. `/speak` accepts a **message id**, not text: the server
+  loads it with `profile.userId = session.user.id`, answers `404` for both missing and foreign messages, and
+  returns `no-store` audio with a sandbox CSP.
+- Raw audio is never written to disk, the database or logs. It exists in the request buffer only; audit rows
+  contain provider, byte count, language and MIME type — never audio or transcript text. Transcripts are
+  stored as chat messages until **Clear chat**; `/settings` and the voice panel both state this.
+- Transcripts and uploaded document text are treated as untrusted input. The pipeline strips control/bidi
+  characters, rejects empty or over-long input, screens prompt-injection phrases, places the question in an
+  explicitly labelled `UNTRUSTED DATA` block, rebuilds sources from server-side context and verifies numeric
+  claims. A spoken command can never bypass a confirmation step.
+- Nothing is read aloud on page load. Speech starts only after the user enters voice mode and asks a question,
+  or presses **Replay** / **Read aloud**; **Mute** and **Stop speaking** always win, including while a
+  server audio response is still downloading.
+
+**Automated tests**
+
+`npm test` uses Node's built-in test runner through `tsx` (no test framework dependency) and covers:
+authorization/ownership (including foreign profile and message ids), retrieval grounding and numeric-claim
+rejection, Hindi and English grounding, emergency/negation detection, sensitive-action refusal, transcript
+sanitisation and injection screening, rate limiting, provider configuration/secret exposure, error
+classification and HTTP status mapping, spoken-text cleaning, and prompt construction.
 
 ---
 
@@ -363,6 +430,12 @@ so the file is optional for the demo.
 | `INTERACTION_PROVIDER` | `demo` | `demo` (seeded dataset) \| `rxnav` (public NLM RxNorm API) |
 | `RXNAV_BASE_URL` | `https://rxnav.nlm.nih.gov/REST` | Point the RxNorm adapter at a mirror/proxy |
 | `ABDM_MODE` | `demo` | `demo` \| `sandbox` \| `production` — gates how ABHA linking may be described; this build makes no ABDM calls |
+| `VOICE_STT_PROVIDER` / `VOICE_TTS_PROVIDER` | `browser` | `browser` \| `openai` \| `none` (text-only); a server provider without a key falls back to browser and is reported |
+| `VOICE_OPENAI_API_KEY` / `VOICE_OPENAI_BASE_URL` | empty | Speech-only key/base URL; fall back to `OPENAI_API_KEY` / `OPENAI_BASE_URL` |
+| `VOICE_STT_MODEL` / `VOICE_TTS_MODEL` | `whisper-1` / `tts-1` | Models sent to the OpenAI-compatible speech endpoints |
+| `VOICE_TTS_VOICE` / `_EN` / `_HI` | empty / `alloy` / `shimmer` | Shared override, then per-language voices |
+| `VOICE_MAX_RECORDING_SECONDS` / `VOICE_MAX_AUDIO_MB` | `45` / `8` | Client recording cap and server upload cap |
+| `VOICE_MAX_SPEAK_CHARS` / `VOICE_MAX_QUESTION_CHARS` | `1500` / `400` | Spoken-answer and transcript limits |
 
 An unconfigured or failing provider **degrades to the demo provider instead of erroring**, and every
 surface shows *which* provider answered (e.g. “Demo AI (built-in, factors only your records)”) — the UI
@@ -380,6 +453,7 @@ never implies a real model or a live ABDM connection when there isn't one.
 | `npm run typecheck` | `tsc --noEmit` — **0 errors is the bar** |
 | `npm run setup` | generate + `db push` + seed |
 | `npm run db:push` / `db:seed` / `db:reset` / `db:studio` | schema, seed, wipe-and-reseed, Prisma Studio |
+| `npm test` | Node test runner (`node --import tsx --test`) for the voice, grounding and authorization suites |
 
 ---
 
@@ -403,6 +477,16 @@ Stated plainly so nobody demos this as something it is not:
   localised, but `<title>` is not (a mechanical `generateMetadata` change per page if you want it).
 - Single-node SQLite, no queue/retry for OCR jobs, no push notifications (the “reminders” list is derived
   from dose slots, not an alarm), and no clinical validation of the seeded values (they are fictional).
+- **Voice providers are not bundled.** Browser speech needs browser support (and, for recognition, usually a
+  network connection); server speech needs your own OpenAI-compatible key. The routes were verified end-to-end
+  against a local OpenAI-compatible stub, not a live vendor key. Hindi quality depends on the installed
+  `hi-IN` browser voice or the configured provider voice; when no suitable voice exists the answer stays on
+  screen and the UI explains the limitation.
+- Voice input is push-to-talk (no wake word/hands-free mode), and rate limits are **in-memory per server
+  process**, not a distributed limiter. A multi-instance deployment needs Redis (or similar) for shared limits.
+- Browser speech recognition may send audio to the browser vendor (for example, Chrome's speech service);
+  server transcription sends it to your configured provider. Both are disclosed in the panel. The app itself
+  stores no raw audio, only the transcript as part of the chat history.
 
 ---
 

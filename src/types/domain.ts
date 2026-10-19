@@ -80,18 +80,43 @@ export type HealthSummarySections = {
   plainSummary: string;
 };
 
+/**
+ * A specific value quoted from the source record, shown beneath the source
+ * link. The assistant may only attach facts that exist in the signed-in
+ * profile's stored record — never values returned by a language model.
+ */
+export type ChatSourceFact = {
+  testName: string;
+  value: string;
+  unit: string | null;
+  referenceRange: string | null;
+  status: ResultStatus;
+  isVerified: boolean;
+};
+
 export type ChatSource = {
   recordId: string;
   title: string;
   date: string;
   type: RecordType | string;
+  /** Values that support the answer (test name, value, unit, report range). */
+  facts?: ChatSourceFact[];
+  /** OCR confidence stored on the record (0..1) when known. */
+  ocrConfidence?: number | null;
+  /** True when the record was flagged for human review. */
+  needsReview?: boolean;
 };
+
+/** How well an answer is supported by stored records. */
+export type AnswerConfidence = "high" | "medium" | "low" | "none";
 
 export type ChatAnswer = {
   content: string;
   sources: ChatSource[];
   grounded: boolean;
   intent: string;
+  confidence?: AnswerConfidence;
+  limitations?: string[];
 };
 
 export type InteractionFinding = {

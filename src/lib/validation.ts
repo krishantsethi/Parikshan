@@ -114,6 +114,20 @@ export const interactionCheckSchema = z
 
 export const chatAskSchema = z.object({
   question: z.string().trim().min(2, { message: "Please type a question" }).max(400),
+  /** Voice turns are treated exactly like typed text for authorization. */
+  inputMode: z.enum(["text", "voice"]).default("text"),
+});
+
+/** Server-side text-to-speech only accepts a message id, never free text. */
+export const voiceSpeakSchema = z
+  .object({
+    messageId: z.string().trim().min(1).max(64),
+    language: z.enum(["en", "hi"]).optional(),
+  })
+  .strict();
+
+export const voiceTranscribeMetaSchema = z.object({
+  language: z.enum(["en", "hi"]).default("en"),
 });
 
 export const deleteDataSchema = z.object({

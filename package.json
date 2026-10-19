@@ -15,7 +15,8 @@
     "db:reset": "prisma db push --force-reset --skip-generate && prisma db seed",
     "db:studio": "prisma studio",
     "setup": "prisma generate && prisma db push && prisma db seed",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "test": "node --import tsx --test tests/voice/*.test.ts"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^6.19.3",
