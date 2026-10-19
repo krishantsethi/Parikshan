@@ -16,6 +16,7 @@ import { useI18n } from "@/components/providers/i18n-provider";
 import { LANGUAGES } from "@/lib/i18n";
 import { signOutAction, deleteAccountAction } from "@/lib/actions/auth";
 import { formatLongDate } from "@/lib/i18n/format";
+import type { VoicePublicConfig } from "@/lib/voice/config";
 import { maskAbhaNumber, formatAbhaNumber, type AbhaLinkStatus } from "@/lib/fhir/abha";
 import {
   Dialog,
@@ -45,6 +46,7 @@ export function SettingsPanel({
   storage,
   activeProfileName,
   abhaStatus,
+  voice,
 }: {
   user: {
     name: string;
@@ -55,6 +57,7 @@ export function SettingsPanel({
   };
   storage: { records: number; bytes: number };
   activeProfileName: string;
+  voice: VoicePublicConfig;
   /** Derived on the server from ABDM_MODE — never asserted by the client. */
   abhaStatus: AbhaLinkStatus;
 }) {
@@ -147,6 +150,55 @@ export function SettingsPanel({
             onChange={(value) => setPreference("autoReadAloud", value)}
             disabled={!prefs.readAloud}
           />
+        </CardContent>
+      </Card>
+
+      {/* Voice assistant */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("settings.sectionVoice")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          <p className="text-ink-700">{t("settings.voiceBody")}</p>
+          <dl className="space-y-2">
+            <AccountRow
+              label={t("settings.voiceStt")}
+              value={
+                voice.sttProvider === "openai"
+                  ? t("voice.provider.server")
+                  : voice.sttProvider === "browser"
+                    ? t("voice.provider.browser")
+                    : t("voice.provider.none")
+              }
+            />
+            <AccountRow
+              label={t("settings.voiceTts")}
+              value={
+                voice.ttsProvider === "openai"
+                  ? t("voice.provider.server")
+                  : voice.ttsProvider === "browser"
+                    ? t("voice.provider.browser")
+                    : t("voice.provider.none")
+              }
+            />
+            <AccountRow
+              label={t("settings.voiceLanguage")}
+              value={`${t("voice.english")} + ${t("voice.hindi")}`}
+            />
+            <AccountRow
+              label={t("settings.voiceRetention")}
+              value={t("settings.voiceRetentionValue")}
+            />
+          </dl>
+          <p className="text-xs text-muted">{t("settings.voiceKeysNote")}</p>
+          <p className="text-xs text-muted">
+            {voice.serverSttAvailable || voice.serverTtsAvailable
+              ? t("settings.voiceServerNote")
+              : t("settings.voiceBrowserNote")}
+          </p>
+          {voice.notes.length > 0 && (
+            <Badge variant="watch">{t("voice.providerUnavailable")}</Badge>
+          )}
         </CardContent>
       </Card>
 

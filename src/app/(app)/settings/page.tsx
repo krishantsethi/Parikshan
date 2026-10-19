@@ -6,6 +6,7 @@ import { getActiveProfile } from "@/lib/auth/guards";
 import { prisma } from "@/lib/database/client";
 import { createTranslator } from "@/lib/i18n";
 import { abdmMode, abhaLinkStatus } from "@/lib/fhir/abha";
+import { getVoicePublicConfig } from "@/lib/voice/config";
 import type { Language } from "@/types/domain";
 
 export const metadata: Metadata = { title: "Profile & settings" };
@@ -45,6 +46,7 @@ export default async function SettingsPage() {
         abhaStatus={abhaStatus}
         storage={{ records, bytes: fileTotals._sum.fileSize ?? 0 }}
         activeProfileName={profile.name}
+        voice={getVoicePublicConfig()}
       />
     </div>
   );

@@ -116,7 +116,7 @@ export class OpenAIHealthProvider implements HealthAIProvider {
   async answerQuestion(request: QuestionRequest): Promise<QuestionResponse> {
     const { context, question, language } = request;
     const raw = await this.chat(
-      buildQuestionPrompt({ question, contextJson: serializeContext(context), language }),
+      buildQuestionPrompt({ question, contextJson: serializeContext(context), language, history: request.history }),
       600,
     );
     const parsed = answerSchema.parse(JSON.parse(raw));

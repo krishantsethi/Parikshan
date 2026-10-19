@@ -3,75 +3,163 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/database/client";
 import { getCurrentUser } from "@/lib/auth/session";
-import { getActiveProfile } from "@/lib/auth/guards";
-import { writeAuditLog } from "@/lib/auth/guards";
-import { answerQuestionSafely } from "@/lib/ai";
-import { getAIContext } from "@/lib/database/queries";
+import { getActiveProfile, writeAuditLog } from "@/lib/auth/guards";
+import { answerQuestionSafely, getHealthAIProvider } from "@/lib/ai";
+import { getAIContext, getRecentChatHistory } from "@/lib/database/queries";
 import { chatAskSchema } from "@/lib/validation";
+import { runAssistantTurn, type AssistantTurn } from "@/lib/voice/assistant";
+import { getVoiceConfig } from "@/lib/voice/config";
+import { checkRateLimit, RATE_LIMIT_RULES } from "@/lib/voice/rate-limit";
 import type { ChatSource } from "@/types/domain";
 
 /**
- * AI assistant.
+ * AI assistant server action.
  *
- * The context is built strictly from the active profile's stored records, so a
- * question can only ever be answered from data the user actually uploaded. When
- * the answer is not in the records the provider returns `grounded: false` and
- * the UI shows "I couldn't find that information in your uploaded records."
+ * Security properties:
+ *  • The profile is resolved from the session every time; a client cannot name
+ *    another profile or family member.
+ *  • The record context and conversation history are both scoped to that
+ *    profile, so follow-up questions cannot widen access.
+ *  • Emergency and destructive-command handling happens BEFORE any provider is
+ *    called (see src/lib/voice/assistant.ts).
+ *  • Rate limiting is keyed by user id, never by transcript or health data.
+ *  • Only the transcript is persisted (never audio), and audit metadata never
+ *    contains clinical content.
  */
-export async function askAssistantAction(input: unknown): Promise<
-  | { ok: true; answer: string; sources: ChatSource[]; grounded: boolean; provider: string; isMock: boolean }
-  | { ok: false; error: string }
-> {
+
+export type AskAssistantResult =
+  | {
+      ok: true;
+      answer: string;
+      sources: ChatSource[];
+      grounded: boolean;
+      provider: string;
+      isMock: boolean;
+      messageId: string;
+      intent: string;
+      language: "en" | "hi";
+      inputMode: "text" | "voice";
+      confidence: AssistantTurn["confidence"];
+      limitations: AssistantTurn["limitations"];
+      spokenText: string;
+      emergency: boolean;
+      requiresConfirmation: boolean;
+      numericClaims: string[];
+    }
+  | { ok: false; error: string; retryAfterSeconds?: number };
+
+export async function askAssistantAction(input: unknown): Promise<AskAssistantResult> {
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: "UNAUTHENTICATED" };
 
   const parsed = chatAskSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "QUESTION_TOO_SHORT" };
+  if (!parsed.success) {
+    const raw = (input as { question?: unknown } | null)?.question;
+    const length = typeof raw === "string" ? raw.trim().length : 0;
+    return { ok: false, error: length > 400 ? "QUESTION_TOO_LONG" : "QUESTION_TOO_SHORT" };
+  }
 
-  const profile = await getActiveProfile(user.id);
+  const limit = checkRateLimit(
+    "assistant",
+    user.id,
+    RATE_LIMIT_RULES.assistant.limit,
+    RATE_LIMIT_RULES.assistant.windowMs,
+  );
+  if (!limit.allowed) {
+    return { ok: false, error: "RATE_LIMITED", retryAfterSeconds: limit.retryAfterSeconds };
+  }
+
   const language = user.preferences?.language === "hi" ? "hi" : "en";
+  const profile = await getActiveProfile(user.id);
+  const config = getVoiceConfig();
 
-  const context = await getAIContext(profile.id, { name: profile.name, kind: profile.kind }, language);
-  const response = await answerQuestionSafely({
-    context,
-    question: parsed.data.question,
-    language,
-  });
+  const [context, history] = await Promise.all([
+    getAIContext(profile.id, { name: profile.name, kind: profile.kind }, language),
+    getRecentChatHistory(profile.id, 6),
+  ]);
 
-  await prisma.chatMessage.create({
-    data: {
-      profileId: profile.id,
-      role: "user",
-      content: parsed.data.question,
-    },
-  });
-  await prisma.chatMessage.create({
-    data: {
-      profileId: profile.id,
-      role: "assistant",
-      content: response.content,
-      sources: JSON.stringify(response.sources),
-      intent: response.intent,
-      grounded: response.grounded,
-    },
-  });
+  let outcome;
+  try {
+    outcome = await runAssistantTurn({
+      question: parsed.data.question,
+      inputMode: parsed.data.inputMode,
+      language,
+      context,
+      history,
+      provider: getHealthAIProvider(),
+      // Reuses the existing provider fallback behaviour and reports it as a
+      // limitation when a hosted model is unavailable.
+      answerQuestion: (request) => answerQuestionSafely(request),
+      maxSpeakChars: config.maxSpeakChars,
+    });
+  } catch {
+    return { ok: false, error: "PROVIDER_ERROR" };
+  }
+
+  if (outcome.kind === "invalid") {
+    return { ok: false, error: outcome.code };
+  }
+
+  const turn = outcome.turn;
+  const [userMessage, assistantMessage] = await prisma.$transaction([
+    prisma.chatMessage.create({
+      data: {
+        profileId: profile.id,
+        role: "user",
+        content: parsed.data.question,
+      },
+    }),
+    prisma.chatMessage.create({
+      data: {
+        profileId: profile.id,
+        role: "assistant",
+        content: turn.content,
+        sources: JSON.stringify(turn.sources),
+        spokenText: turn.spokenText,
+        intent: turn.intent,
+        grounded: turn.grounded,
+      },
+    }),
+  ]);
+
+  void userMessage;
 
   await writeAuditLog({
     userId: user.id,
     action: "assistant.ask",
     entityType: "HealthProfile",
     entityId: profile.id,
-    meta: { intent: response.intent, grounded: response.grounded, provider: response.provider },
+    meta: {
+      inputMode: parsed.data.inputMode,
+      intent: turn.intent,
+      grounded: turn.grounded,
+      provider: turn.provider,
+      confidence: turn.confidence,
+      emergency: turn.emergency,
+      requiresConfirmation: turn.requiresConfirmation,
+      numericClaimCount: turn.numericClaims.length,
+      voice: turn.injectionSuspicion ? "untrusted-transcript" : undefined,
+    },
   });
 
   revalidatePath("/assistant");
   return {
     ok: true,
-    answer: response.content,
-    sources: response.sources,
-    grounded: response.grounded,
-    provider: response.provider,
-    isMock: response.isMock,
+    answer: turn.content,
+    sources: turn.sources,
+    grounded: turn.grounded,
+    provider: turn.provider,
+    isMock: turn.isMock,
+    messageId: assistantMessage.id,
+    intent: turn.intent,
+    language,
+    inputMode: parsed.data.inputMode,
+    confidence: turn.confidence,
+    limitations: turn.limitations,
+    spokenText: turn.spokenText,
+    emergency: turn.emergency,
+    requiresConfirmation: turn.requiresConfirmation,
+    numericClaims: turn.numericClaims,
   };
 }
 
@@ -80,6 +168,12 @@ export async function clearChatAction(): Promise<{ ok: boolean }> {
   if (!user) return { ok: false };
   const profile = await getActiveProfile(user.id);
   await prisma.chatMessage.deleteMany({ where: { profileId: profile.id } });
+  await writeAuditLog({
+    userId: user.id,
+    action: "assistant.clear",
+    entityType: "HealthProfile",
+    entityId: profile.id,
+  });
   revalidatePath("/assistant");
   return { ok: true };
 }
@@ -89,7 +183,6 @@ export async function explainTermAction(term: string): Promise<{ ok: boolean; ex
   const user = await getCurrentUser();
   if (!user) return { ok: false };
   const language = user.preferences?.language === "hi" ? "hi" : "en";
-  const { getHealthAIProvider } = await import("@/lib/ai");
   const explanation = await getHealthAIProvider().explainMedicalTerm(term, language);
   return { ok: true, explanation };
 }

@@ -260,11 +260,34 @@ export async function getChatHistory(profileId: string, take = 50) {
     content: message.content,
     sources: parseSources(message.sources),
     grounded: message.grounded,
+    intent: message.intent,
     createdAt: message.createdAt.toISOString(),
   }));
 }
 
 export type ChatHistoryMessage = Awaited<ReturnType<typeof getChatHistory>>[number];
+
+/**
+ * Recent turns for the assistant prompt.
+ *
+ * Scoped to a profile id that was already ownership-checked, so a follow-up
+ * question can only reuse history from the same person. Returns the oldest first
+ * because providers read the conversation top-to-bottom.
+ */
+export async function getRecentChatHistory(profileId: string, take = 6) {
+  const messages = await prisma.chatMessage.findMany({
+    where: { profileId },
+    orderBy: { createdAt: "desc" },
+    take,
+    select: { role: true, content: true },
+  });
+  return messages
+    .reverse()
+    .map((message) => ({
+      role: message.role === "user" ? ("user" as const) : ("assistant" as const),
+      content: message.content,
+    }));
+}
 
 export async function getDashboardSnapshot(userId: string, profileId: string, profileName: string) {
   const [metricSummaries, insights, records, medications, dosesToday] = await Promise.all([
@@ -330,6 +353,8 @@ export async function getAIContext(
     doctorName: record.doctorName,
     facilityName: record.facilityName,
     diagnosisTerms: safeJsonArray(record.diagnosisTerms),
+    status: record.status,
+    ocrConfidence: record.ocrConfidence,
     labValues: record.labResults.map((value) => ({
       testName: value.testName,
       metricKey: value.numericValue !== null ? getMetricKeyFor(value.testName) : null,
@@ -338,6 +363,7 @@ export async function getAIContext(
       unit: value.unit,
       referenceRange: value.referenceRange,
       status: value.status as AIContextRecord["labValues"][number]["status"],
+      isVerified: value.isVerified,
     })),
     medicines: record.medications.map((medicine) => ({
       name: medicine.name,
@@ -461,12 +487,55 @@ export function parseCorrectionCount(value: string | null | undefined): number {
   }
 }
 
+/**
+ * Parses persisted source references.
+ *
+ * Old rows only have `{recordId,title,date,type}`. New rows also carry facts,
+ * OCR confidence and a review flag. Everything is validated because the stored
+ * JSON came from a provider at some point and must not be trusted blindly.
+ */
 function parseSources(value: string | null) {
   if (!value) return [];
   try {
     const parsed = JSON.parse(value);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item) => item && typeof item.recordId === "string");
+    return parsed
+      .filter((item) => item && typeof item.recordId === "string")
+      .map((item) => {
+        const facts = Array.isArray(item.facts)
+          ? item.facts
+              .filter(
+                (fact: unknown): fact is Record<string, unknown> =>
+                  Boolean(fact) &&
+                  typeof (fact as Record<string, unknown>).testName === "string" &&
+                  typeof (fact as Record<string, unknown>).value === "string",
+              )
+              .slice(0, 6)
+              .map((fact: Record<string, unknown>) => ({
+                testName: String(fact.testName),
+                value: String(fact.value),
+                unit: typeof fact.unit === "string" ? fact.unit : null,
+                referenceRange:
+                  typeof fact.referenceRange === "string" ? fact.referenceRange : null,
+                status:
+                  fact.status === "WITHIN_RANGE" ||
+                  fact.status === "BELOW_RANGE" ||
+                  fact.status === "ABOVE_RANGE"
+                    ? fact.status
+                    : ("UNKNOWN" as const),
+                isVerified: fact.isVerified === true,
+              }))
+          : undefined;
+        return {
+          recordId: item.recordId,
+          title: typeof item.title === "string" ? item.title : "",
+          date: typeof item.date === "string" ? item.date : "",
+          type: typeof item.type === "string" ? item.type : "OTHER",
+          ...(facts && facts.length ? { facts } : {}),
+          ...(typeof item.ocrConfidence === "number" ? { ocrConfidence: item.ocrConfidence } : {}),
+          ...(item.needsReview === true ? { needsReview: true } : {}),
+        };
+      });
   } catch {
     return [];
   }

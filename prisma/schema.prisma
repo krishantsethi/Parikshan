@@ -287,6 +287,8 @@ model ChatMessage {
   role    String // user | assistant
   content String
   sources String? // JSON array of { recordId, title, date }
+  /** Speech-friendly version of an assistant answer, including limitations. */
+  spokenText String?
   intent  String?
   grounded Boolean @default(true)
   createdAt DateTime @default(now())

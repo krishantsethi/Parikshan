@@ -24,6 +24,8 @@ export type AIContextLabValue = {
   unit: string | null;
   referenceRange: string | null;
   status: ResultStatus;
+  /** The user (or a reviewer) marked this value as checked. */
+  isVerified?: boolean;
 };
 
 export type AIContextMedicine = {
@@ -45,6 +47,10 @@ export type AIContextRecord = {
   labValues: AIContextLabValue[];
   medicines: AIContextMedicine[];
   summary: string | null;
+  /** OCR confidence for the document (0..1). */
+  ocrConfidence?: number | null;
+  /** PROCESSING | READY | NEEDS_REVIEW | FAILED */
+  status?: string;
 };
 
 export type AIContextMetric = {
@@ -83,10 +89,18 @@ export type SummaryResponse = {
   fallbackReason?: string;
 };
 
+/** Recent turns for contextual follow-ups. Scoped to one profile by the action. */
+export type ConversationTurn = {
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type QuestionRequest = {
   context: AIContext;
   question: string;
   language: Language;
+  /** Previous turns in this conversation (most recent last). */
+  history?: ConversationTurn[];
 };
 
 export type QuestionResponse = ChatAnswer & {
