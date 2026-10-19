@@ -67,6 +67,7 @@ export async function POST(request: Request) {
     select: {
       id: true,
       content: true,
+      spokenText: true,
       profile: { select: { userId: true } },
     },
   });
@@ -83,7 +84,14 @@ export async function POST(request: Request) {
 
   const language: Language =
     parsed.data.language ?? (user.preferences?.language === "hi" ? "hi" : "en");
-  const text = buildSpokenText(access.value.content, config.maxSpeakChars);
+  // Prefer the speech text produced by the same safe pipeline that added
+  // limitations (low OCR confidence, ambiguity, fallback). It is stored with
+  // the message, never supplied by the caller, and re-trimmed to the current
+  // limit in case configuration changed.
+  const text = buildSpokenText(
+    access.value.spokenText || access.value.content,
+    config.maxSpeakChars,
+  );
   if (!text) return jsonVoiceError("INVALID_REQUEST", 422);
 
   try {

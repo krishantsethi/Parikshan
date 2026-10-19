@@ -123,9 +123,15 @@ test("low-confidence OCR is surfaced as a limitation", async () => {
   });
   assert.equal(outcome.kind, "turn");
   if (outcome.kind !== "turn") return;
-  assert.ok(outcome.turn.limitations.some((item) => item.code === "LOW_CONFIDENCE_EXTRACTION"));
+  const limitation = outcome.turn.limitations.find(
+    (item) => item.code === "LOW_CONFIDENCE_EXTRACTION",
+  );
+  assert.ok(limitation);
   assert.ok(outcome.turn.confidence === "medium" || outcome.turn.confidence === "low");
   assert.ok(outcome.turn.spokenText.length > 0);
+  // The spoken answer must carry the same caveat shown on screen, because the
+  // server TTS route reads the persisted spokenText rather than the markup.
+  assert.ok(limitation && outcome.turn.spokenText.includes(limitation.message.trim()));
 });
 
 test("a generic report question with several reports is marked ambiguous", async () => {

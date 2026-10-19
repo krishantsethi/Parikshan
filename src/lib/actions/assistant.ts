@@ -115,6 +115,7 @@ export async function askAssistantAction(input: unknown): Promise<AskAssistantRe
         role: "assistant",
         content: turn.content,
         sources: JSON.stringify(turn.sources),
+        spokenText: turn.spokenText,
         intent: turn.intent,
         grounded: turn.grounded,
       },

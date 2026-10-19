@@ -358,7 +358,9 @@ client code.
   returns `no-store` audio with a sandbox CSP.
 - Raw audio is never written to disk, the database or logs. It exists in the request buffer only; audit rows
   contain provider, byte count, language and MIME type — never audio or transcript text. Transcripts are
-  stored as chat messages until **Clear chat**; `/settings` and the voice panel both state this.
+  stored as chat messages until **Clear chat**; `/settings` and the voice panel both state this. The
+  speech-friendly version of an answer (including low-confidence and ambiguity caveats) is stored with that
+  message so server-side TTS speaks the same caveats the screen shows — never raw audio.
 - Transcripts and uploaded document text are treated as untrusted input. The pipeline strips control/bidi
   characters, rejects empty or over-long input, screens prompt-injection phrases, places the question in an
   explicitly labelled `UNTRUSTED DATA` block, rebuilds sources from server-side context and verifies numeric
