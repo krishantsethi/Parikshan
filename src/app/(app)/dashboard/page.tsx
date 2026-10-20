@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight, Bot, CalendarDays, LifeBuoy, Upload } from "lucide-react";
+import { ArrowRight, Bot, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,10 +10,18 @@ import { InsightList } from "@/components/health/insight-list";
 import { RecordCard } from "@/components/health/record-card";
 import { DoseTracker, type DoseItem } from "@/components/medications/dose-tracker";
 import { EmptyState, PageHeader, SectionHeading } from "@/components/health/states";
+import { EmergencyAssistanceCard } from "@/components/dashboard/emergency-assistance-card";
+import { UpcomingCareCard } from "@/components/dashboard/upcoming-care-card";
 import { requireUser } from "@/lib/auth/session";
 import { getActiveProfile } from "@/lib/auth/guards";
 import { getDashboardSnapshot } from "@/lib/database/queries";
 import { getMetric } from "@/lib/health/metrics";
+import { listCareTasks } from "@/lib/care/service";
+import { selectUpcomingTasks, todayIso } from "@/lib/care/upcoming";
+import { activeMedicineNames, getCard, listContacts } from "@/lib/safety/service";
+import { cardHasDetails } from "@/lib/safety/card";
+import { computeReadiness } from "@/lib/safety/readiness";
+import { getEmergencyNumber, isVerificationProviderConfigured } from "@/lib/safety/emergency-number";
 import { createTranslator } from "@/lib/i18n";
 import { DOSE_SLOTS, SLOT_DEFAULT_TIME, type DoseSlot, type Language } from "@/types/domain";
 
@@ -31,6 +39,25 @@ export default async function DashboardPage() {
   const snapshot = await getDashboardSnapshot(user.id, profile.id, profile.name);
   const lang: Language = user.preferences?.language === "hi" ? "hi" : "en";
   const t = createTranslator(lang);
+
+  // Emergency readiness and the next few care tasks, both scoped to the active
+  // profile by the service layer (a profile the user does not own yields []).
+  const [contacts, emergencyCard, medicineNames, careTasks] = await Promise.all([
+    listContacts(user.id, profile.id),
+    getCard(user.id, profile.id),
+    activeMedicineNames(user.id, profile.id),
+    listCareTasks(user.id, profile.id),
+  ]);
+  const readiness = computeReadiness({
+    contacts: contacts.map((contact) => ({
+      verificationStatus: contact.verificationStatus,
+      consentEmergencyInfo: contact.consentEmergencyInfo,
+    })),
+    cardHasDetails: cardHasDetails(emergencyCard, medicineNames),
+    verificationProviderConfigured: isVerificationProviderConfigured(),
+  });
+  const upcomingCare = selectUpcomingTasks(careTasks, todayIso(), 3);
+  const openCareCount = careTasks.filter((task) => task.status === "OPEN").length;
 
   const metrics = snapshot.metricSummaries.slice(0, 4).map((metric) => {
     const definition = getMetric(metric.metricKey);
@@ -101,21 +128,21 @@ export default async function DashboardPage() {
                 {t("nav.assistant")}
               </Link>
             </Button>
-            <Button asChild variant="secondary">
-              <Link href="/care">
-                <CalendarDays aria-hidden="true" />
-                {t("nav.care")}
-              </Link>
-            </Button>
-            <Button asChild variant="secondary">
-              <Link href="/emergency">
-                <LifeBuoy aria-hidden="true" />
-                {t("nav.emergency")}
-              </Link>
-            </Button>
           </div>
         }
       />
+
+      {/* Emergency and preventive care are surfaced on the dashboard itself,
+          not only in the navigation, so they are reachable in one glance. */}
+      <div className="grid gap-3 lg:grid-cols-2">
+        <EmergencyAssistanceCard
+          lang={lang}
+          number={getEmergencyNumber()}
+          level={readiness.level}
+          contactCount={contacts.length}
+        />
+        <UpcomingCareCard lang={lang} items={upcomingCare} openCount={openCareCount} />
+      </div>
 
       {!hasData ? (
         <EmptyState

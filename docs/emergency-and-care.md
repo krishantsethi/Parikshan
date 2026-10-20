@@ -12,6 +12,7 @@ Status key: **Done** = built and checked in this repository · **Partial** = bui
 | Provenance legend (extracted / AI-generated / clinician-verified) | Partial — a legend, not per-statement tags (see §7) | `src/components/health/ai-chat.tsx` |
 | Voice answers are never read aloud automatically | Done (`autoSpeak` forced off; playback needs a button press) | `src/components/health/ai-chat.tsx` |
 | "Emergency Help — Call 112" in the header and on the emergency page, behind a confirmation step | Done | `src/components/emergency/emergency-call-button.tsx` |
+| Emergency assistance card on the dashboard (readiness badge, contact prompt, call button, link to the emergency page) | Done | `src/components/dashboard/emergency-assistance-card.tsx` |
 | Emergency contacts: add, edit, reorder, remove (confirmed), priority, method, consent flags | Done | `src/components/emergency/contacts-manager.tsx`, `src/lib/safety/service.ts` |
 | Phone normalisation (India default, +91, E.164) | Done | `src/lib/safety/phone.ts` |
 | OTP verification via a server-side provider (Twilio Verify) | Partial — code written, **not exercised against a live provider** (no credentials in this sandbox). With no provider, verification is unavailable and nothing is marked verified. | `src/lib/safety/verification.ts` |
@@ -22,6 +23,7 @@ Status key: **Done** = built and checked in this repository · **Partial** = bui
 | TEST MODE rehearsal (no calls, no contacts, no SMS/WhatsApp/email, 112 disabled) | Done | `src/components/emergency/test-mode.tsx` (no network calls, no links) |
 | Preventive-care calendar: list + month view, add, edit, complete, postpone, cancel, explicit repeat | Done | `src/components/care/care-calendar.tsx`, `src/lib/care/*` |
 | In-app "due soon" reminders | Done (in-app only) | `care-calendar.tsx` |
+| Next preventive-care tasks on the dashboard (open only, overdue labelled in text, clinician source labelled) | Done | `src/components/dashboard/upcoming-care-card.tsx`, `src/lib/care/upcoming.ts` |
 | Email / SMS / push reminders | Not built (by design; never claimed) | — |
 | Hindi translations for the new screens | Partial — English is complete; Hindi covers the main labels and falls back to English for the rest | `src/lib/i18n/features.ts` |
 | Dashboard entry points (care, emergency) | Done | `src/app/(app)/dashboard/page.tsx` |
@@ -93,6 +95,7 @@ New test files:
 - `tests/safety/service.test.ts` — DB-backed: ownership, cross-user blocking, no-provider behaviour, verification reset, priority renumbering, limit, validation, card provenance.
 - `tests/care/care.test.ts` — calendar validation, month clamping, recurrence, timing, schema rules.
 - `tests/care/service.test.ts` — DB-backed: ownership, complete/repeat, postpone, cancel, validation.
+- `tests/care/upcoming.test.ts` — dashboard selection: open-only, chronological order, overdue flag from the calendar date (not from a timestamp), malformed dates ignored, limits, due-within window.
 
 Other checks: `npm run typecheck`, `npm run build`, and HTTP checks against the running build (pages return 200; server actions return the expected results as listed in §3).
 
@@ -101,7 +104,7 @@ Other checks: `npm run typecheck`, `npm run build`, and HTTP checks against the 
 | Check | Command | Result |
 |---|---|---|
 | Typecheck | `npx tsc --noEmit` | Pass (exit 0, no errors) |
-| Unit and service tests | `npm test` | **90 / 90 pass** (58 existing voice tests + 32 new safety and care tests, including the contact-consent test), 0 fail |
+| Unit and service tests | `npm test` | **96 / 96 pass** (58 voice + 32 safety/care + 6 dashboard care-selection tests), 0 fail |
 | Production build | `npm run build` | Pass (exit 0); `/emergency` and `/care` included |
 | HTTP smoke test on the built app | authenticated `GET` on `/`, `/dashboard`, `/emergency`, `/care`, `/assistant`, `/trends`, `/medications`, `/settings` | All 200; `/emergency` unauthenticated → redirect to `/login` |
 | Theme in server HTML | `GET /emergency` with cookie `phc_theme=dark` | `<html class="dark">` |
@@ -129,6 +132,7 @@ Not performed: browser or visual tests, accessibility audit with assistive techn
 
 Set `EMERGENCY_NUMBER` (optional) and start the app (`npm run setup`, then `npm run dev` or `npm run build && npm start`). Sign in with the demo account.
 
+0. **Dashboard.** At the top of the dashboard, two cards appear before the metrics: *Setup check — Emergency Help — Call 112* (with a readiness badge: Action required → Needs attention → Ready) and *Preventive care* (the next 3 open tasks, "Overdue" in text, "Clinician-recommended" where applicable, and a link to the calendar). The old duplicate Care/Emergency header buttons are gone; both remain in the header, the sidebar and the bottom navigation. The dashboard cards read data for the **active profile** only — switch profiles and both cards change.
 1. **Theme.** Open the header theme button (sun/moon icon). Choose Dark, then reload: the page should stay dark with no light flash. Choose Light, then Match device, and change the OS setting: the page follows it while "Match device" is selected. Check the dashboard, trends chart tooltip, assistant, a dialog and the sign-in page in both themes.
 2. **Assistant.** Open *AI Health Assistant*. The "Pari" character shows "Ready when you are". Ask a question: the state changes to "Looking through your records…", then back. Confirm the answer is **not** read aloud automatically; playback starts only from the speaker button. Check the "How to read this answer" card.
 3. **Call 112.** Click "Emergency Help — Call 112" in the header. A dialog asks for confirmation and states that the website cannot place or confirm the call. Cancel: nothing happens. Confirm: the phone's dialer opens with 112 (on a desktop, the browser may ask what to do with the tel: link). The page must **not** say a call was placed.
