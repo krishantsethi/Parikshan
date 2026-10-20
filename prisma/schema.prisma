@@ -90,13 +90,17 @@ model Consent {
   id        String   @id @default(cuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  purpose   String // e.g. "SELF_CARE" | "CAREGIVER_ACCESS"
+  purpose   String // e.g. "SELF_CARE" | "CAREGIVER_ACCESS" | "EMERGENCY_CONTACT_INFO" | "EMERGENCY_LOCATION_SHARING"
   status    String   @default("GRANTED") // GRANTED | REVOKED | EXPIRED
   version   String   @default("demo-1.0")
+  /// Optional subject of the consent, e.g. the EmergencyContact id for contact-level consents.
+  subjectId String?
+  /// Append-only: the most recent row for (userId, purpose, subjectId) is the current state.
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+  @@index([userId, purpose, subjectId])
   @@map("consents")
 }
 

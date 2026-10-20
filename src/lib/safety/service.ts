@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/database/client";
 import { writeAuditLog } from "@/lib/auth/guards";
 import { normalizePhone } from "./phone";
@@ -86,6 +87,50 @@ async function ownsProfile(userId: string, profileId: string) {
   return prisma.healthProfile.findFirst({ where: { id: profileId, userId }, select: { id: true } });
 }
 
+/**
+ * Contact-level consents are stored as append-only rows in `Consent`, one row
+ * per change, keyed by purpose and the contact id. The newest row is the
+ * current state. Only changed flags write a row.
+ */
+const CONTACT_CONSENTS = [
+  { flag: "consentEmergencyInfo", purpose: "EMERGENCY_CONTACT_INFO" },
+  { flag: "consentLocation", purpose: "EMERGENCY_LOCATION_SHARING" },
+] as const;
+
+type ConsentFlags = { consentEmergencyInfo: boolean; consentLocation: boolean };
+
+/** Appends consent rows for flags that changed. Returns the changes so the caller can audit them. */
+async function recordConsentChanges(
+  tx: Prisma.TransactionClient,
+  userId: string,
+  contactId: string,
+  before: ConsentFlags | null,
+  after: ConsentFlags,
+): Promise<Array<{ purpose: string; status: "GRANTED" | "REVOKED" }>> {
+  const changes: Array<{ purpose: string; status: "GRANTED" | "REVOKED" }> = [];
+  for (const { flag, purpose } of CONTACT_CONSENTS) {
+    const was = before?.[flag] ?? false;
+    const now = after[flag];
+    if (was === now) continue;
+    const status = now ? "GRANTED" : "REVOKED";
+    await tx.consent.create({ data: { userId, purpose, status, subjectId: contactId } });
+    changes.push({ purpose, status });
+  }
+  return changes;
+}
+
+async function auditConsentChanges(userId: string, contactId: string, changes: Array<{ purpose: string; status: string }>) {
+  for (const change of changes) {
+    await writeAuditLog({
+      userId,
+      action: change.status === "GRANTED" ? "consent.grant" : "consent.revoke",
+      entityType: "EmergencyContact",
+      entityId: contactId,
+      meta: { purpose: change.purpose },
+    });
+  }
+}
+
 /** Lists contacts for a profile the user owns. Returns [] (not an error) for a profile they do not own. */
 export async function listContacts(userId: string, profileId: string): Promise<ContactView[]> {
   if (!(await ownsProfile(userId, profileId))) return [];
@@ -104,7 +149,7 @@ export async function createContact(userId: string, profileId: string, raw: unkn
     const count = await tx.emergencyContact.count({ where: { profileId } });
     if (count >= MAX_CONTACTS) return null;
     const last = await tx.emergencyContact.findFirst({ where: { profileId }, orderBy: { priority: "desc" }, select: { priority: true } });
-    return tx.emergencyContact.create({
+    const row = await tx.emergencyContact.create({
       data: {
         profileId,
         name: parsed.data.name,
@@ -118,10 +163,14 @@ export async function createContact(userId: string, profileId: string, raw: unkn
         notes: parsed.data.notes || null,
       },
     });
+    const consents = await recordConsentChanges(tx, userId, row.id, null, row);
+    return { row, consents };
   });
   if (!created) return { ok: false, error: "LIMIT_REACHED" };
-  await writeAuditLog({ userId, action: "emergency_contact.create", entityType: "EmergencyContact", entityId: created.id, meta: { priority: created.priority } });
-  return { ok: true, data: toView(created) };
+  const { row: createdRow, consents } = created;
+  await writeAuditLog({ userId, action: "emergency_contact.create", entityType: "EmergencyContact", entityId: createdRow.id, meta: { priority: createdRow.priority } });
+  await auditConsentChanges(userId, createdRow.id, consents);
+  return { ok: true, data: toView(createdRow) };
 }
 
 export async function updateContact(userId: string, contactId: string, raw: unknown): Promise<ServiceResult<ContactView>> {
@@ -133,7 +182,8 @@ export async function updateContact(userId: string, contactId: string, raw: unkn
   if (!phone.ok) return { ok: false, error: "INVALID_PHONE", fieldErrors: { phone: "Enter a valid mobile number for the selected country." } };
 
   const phoneChanged = phone.e164 !== existing.phoneE164;
-  const updated = await prisma.emergencyContact.update({
+  const updated = await prisma.$transaction(async (tx) => {
+    const row = await tx.emergencyContact.update({
     where: { id: contactId },
     data: {
       name: parsed.data.name,
@@ -146,22 +196,33 @@ export async function updateContact(userId: string, contactId: string, raw: unkn
       // A changed number must be verified again; a cleared one is never "verified".
       ...(phoneChanged ? { verificationStatus: "UNVERIFIED", verifiedAt: null } : {}),
     },
+    });
+    const consents = await recordConsentChanges(tx, userId, contactId, existing, row);
+    return { row, consents };
   });
   await writeAuditLog({ userId, action: "emergency_contact.update", entityType: "EmergencyContact", entityId: contactId, meta: { phoneChanged } });
-  return { ok: true, data: toView(updated) };
+  await auditConsentChanges(userId, contactId, updated.consents);
+  return { ok: true, data: toView(updated.row) };
 }
 
 export async function deleteContact(userId: string, contactId: string): Promise<ServiceResult> {
-  const existing = await prisma.emergencyContact.findFirst({ where: { id: contactId, profile: { userId } }, select: { id: true, profileId: true } });
+  const existing = await prisma.emergencyContact.findFirst({ where: { id: contactId, profile: { userId } } });
   if (!existing) return { ok: false, error: "NOT_FOUND" };
-  await prisma.$transaction(async (tx) => {
+  const consents = await prisma.$transaction(async (tx) => {
     await tx.emergencyContact.delete({ where: { id: contactId } });
+    // Deleting a contact withdraws any consent it held.
+    const revoked = await recordConsentChanges(tx, userId, contactId, existing, {
+      consentEmergencyInfo: false,
+      consentLocation: false,
+    });
     const rest = await tx.emergencyContact.findMany({ where: { profileId: existing.profileId }, orderBy: [{ priority: "asc" }, { createdAt: "asc" }] });
     for (const [index, row] of rest.entries()) {
       if (row.priority !== index + 1) await tx.emergencyContact.update({ where: { id: row.id }, data: { priority: index + 1 } });
     }
+    return revoked;
   });
   await writeAuditLog({ userId, action: "emergency_contact.delete", entityType: "EmergencyContact", entityId: contactId });
+  await auditConsentChanges(userId, contactId, consents);
   return { ok: true };
 }
 

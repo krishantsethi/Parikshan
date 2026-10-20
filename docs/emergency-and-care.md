@@ -101,7 +101,7 @@ Other checks: `npm run typecheck`, `npm run build`, and HTTP checks against the 
 | Check | Command | Result |
 |---|---|---|
 | Typecheck | `npx tsc --noEmit` | Pass (exit 0, no errors) |
-| Unit and service tests | `npm test` | **89 / 89 pass** (58 existing voice tests + 31 new safety and care tests), 0 fail |
+| Unit and service tests | `npm test` | **90 / 90 pass** (58 existing voice tests + 32 new safety and care tests, including the contact-consent test), 0 fail |
 | Production build | `npm run build` | Pass (exit 0); `/emergency` and `/care` included |
 | HTTP smoke test on the built app | authenticated `GET` on `/`, `/dashboard`, `/emergency`, `/care`, `/assistant`, `/trends`, `/medications`, `/settings` | All 200; `/emergency` unauthenticated → redirect to `/login` |
 | Theme in server HTML | `GET /emergency` with cookie `phc_theme=dark` | `<html class="dark">` |
@@ -113,11 +113,11 @@ Not performed: browser or visual tests, accessibility audit with assistive techn
 
 - **No browser verification.** This sandbox has no browser, so the dark theme, mascot animations, dialogs and layouts were **not visually inspected**. Checks were: typecheck, build, server-rendered HTML (including `class="dark"` from the cookie) and the server actions over HTTP.
 - **Live SMS verification is untested.** The Twilio code path was written against the documented REST API but has not been run with credentials.
-- **Hindi is partial** for the new screens (falls back to English).
-- **Provenance** is shown as a legend for the assistant. Individual answer items are not yet tagged per statement; "clinician-verified" is always "none" in this build.
+- **Hindi** covers every string on the new screens (204 keys). The translations have not been reviewed by a native speaker or a clinician. A missing string still falls back to English.
+- **Provenance** is shown per answer: a line states that the wording is AI-generated, that values come from the records listed below, and that nothing is clinician-verified. Individual sentences are not tagged.
 - **Medicines** on the card come from the existing list; nothing is imported from documents, and nothing is marked verified.
 - **Blood group, allergies and conditions** are user-entered (self-reported). There is no verification mechanism, so nothing is labelled verified.
-- **Consent flags** are stored on each contact. They are not yet written as `Consent` rows.
+- **Consent** is recorded as append-only `Consent` rows (purposes `EMERGENCY_CONTACT_INFO` and `EMERGENCY_LOCATION_SHARING`, with `subjectId` set to the contact id). Each change adds a row, and deleting a contact adds REVOKED rows. The contact's own flags remain the source for the UI. Adding `subjectId` needs `npm run db:push`.
 - **Reminders** are in-app only. No email, SMS, WhatsApp or push delivery exists, and none is claimed.
 - **Care tasks** store calendar dates and times without timezone conversion, as specified. Display uses the device's time zone.
 - **Lock-screen display** is not possible from a web page. The card page warns about this; a printed copy is recommended.

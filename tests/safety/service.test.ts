@@ -137,3 +137,33 @@ test("emergency card rejects an unknown blood group value", async () => {
   const result = await service.saveCard(user.id, profile.id, { bloodGroup: "Z+" });
   assert.equal(result.ok, false);
 });
+
+test("contact consents are appended to Consent per change and revoked on delete", async () => {
+  const { user, profile } = await makeUser(prisma, "consent");
+  const created = await service.createContact(user.id, profile.id, ALICE_CONTACT);
+  assert.equal(created.ok, true);
+  if (!created.ok || !("data" in created)) return;
+  const contactId = created.data.id;
+
+  const rowsFor = (purpose: string) =>
+    prisma.consent.findMany({ where: { userId: user.id, purpose, subjectId: contactId }, orderBy: { createdAt: "asc" } });
+  assert.deepEqual((await rowsFor("EMERGENCY_CONTACT_INFO")).map((r) => r.status), ["GRANTED"]);
+  assert.deepEqual((await rowsFor("EMERGENCY_LOCATION_SHARING")).map((r) => r.status), ["GRANTED"]);
+
+  // Withdrawing location consent appends one REVOKED row and leaves the other flag alone.
+  const withdrawn = await service.updateContact(user.id, contactId, { ...ALICE_CONTACT, consentLocation: false });
+  assert.equal(withdrawn.ok, true);
+  assert.deepEqual((await rowsFor("EMERGENCY_LOCATION_SHARING")).map((r) => r.status), ["GRANTED", "REVOKED"]);
+  assert.deepEqual((await rowsFor("EMERGENCY_CONTACT_INFO")).map((r) => r.status), ["GRANTED"]);
+
+  // Saving again with no change adds no rows.
+  await service.updateContact(user.id, contactId, { ...ALICE_CONTACT, consentLocation: false });
+  assert.equal((await rowsFor("EMERGENCY_LOCATION_SHARING")).length, 2);
+
+  // Deleting the contact revokes what is still granted, and the audit log records the change without contact details.
+  assert.deepEqual(await service.deleteContact(user.id, contactId), { ok: true });
+  assert.deepEqual((await rowsFor("EMERGENCY_CONTACT_INFO")).map((r) => r.status), ["GRANTED", "REVOKED"]);
+  const revokeAudit = await prisma.auditLog.findFirst({ where: { userId: user.id, action: "consent.revoke", entityId: contactId } });
+  assert.ok(revokeAudit);
+  assert.doesNotMatch(revokeAudit.meta ?? "", /Ravi|9876543210/);
+});
