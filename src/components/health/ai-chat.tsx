@@ -469,6 +469,12 @@ function MessageBubble({ message }: { message: ChatMessageView }) {
             )}
           </div>
 
+          {!emergency && !confirmation && !error && (
+            <p className="text-xs leading-relaxed text-ink-600" data-testid="answer-provenance">
+              {featureText(lang, (message.sources ?? []).length > 0 ? "prov.withSources" : "prov.noSources")}
+            </p>
+          )}
+
           {(visibleLimitations.length > 0 || needsReview) && !emergency && !confirmation && !error && (
             <div className="rounded-xl bg-watch-50 px-3 py-2 text-xs leading-relaxed text-ink-700">
               <p className="flex items-center gap-1.5 font-semibold text-watch-700">
