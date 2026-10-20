@@ -229,6 +229,19 @@ export const featureEn = {
   "care.reopen": "Reopen",
   "care.genericError": "Something went wrong. Try again.",
   "care.legal": "Health guidance on this page is general information. Ask your doctor which checks are right for you.",
+
+  "care.dashboardTitle": "Preventive care",
+  "care.dashboardBody": "Check-ups and tasks you or your clinician added.",
+  "care.dashboardEmpty": "No upcoming tasks. Add a check-up or screening when you and your doctor have decided what is due.",
+  "care.dashboardOverdue": "Overdue",
+  "care.dashboardDue": "Due {date}",
+  "care.dashboardClinician": "Clinician-recommended",
+  "care.dashboardViewAll": "Open calendar",
+  "care.dashboardCount": "{n} open task(s)",
+
+  "emergency.dashboardReadiness": "Setup check",
+  "emergency.manageCard": "Contacts & emergency card",
+  "emergency.dashboardHint": "Nothing is called or sent from this page.",
 } as const;
 
 export type FeatureKey = keyof typeof featureEn;
@@ -439,6 +452,19 @@ const featureHi: Partial<Record<FeatureKey, string>> = {
   "care.reopen": "फिर से खोलें",
   "care.genericError": "कुछ गलत हो गया। फिर से कोशिश करें।",
   "care.legal": "इस पेज की स्वास्थ्य जानकारी सामान्य जानकारी है। पूछें कि आपके लिए कौन-सी जाँच सही है।",
+
+  "care.dashboardTitle": "रोकथाम देखभाल",
+  "care.dashboardBody": "जाँच और कार्य जो आपने या आपके डॉक्टर ने जोड़े हैं।",
+  "care.dashboardEmpty": "कोई आगामी कार्य नहीं। जब आप और आपके डॉक्टर तय करें कि कौन-सी जाँच करनी है, तब जोड़ें।",
+  "care.dashboardOverdue": "समय बीत गया",
+  "care.dashboardDue": "{date} को देय",
+  "care.dashboardClinician": "डॉक्टर द्वारा सुझाया",
+  "care.dashboardViewAll": "कैलेंडर खोलें",
+  "care.dashboardCount": "{n} खुले कार्य",
+
+  "emergency.dashboardReadiness": "सेटअप जाँच",
+  "emergency.manageCard": "संपर्क और आपातकालीन कार्ड",
+  "emergency.dashboardHint": "इस पेज से कोई कॉल या संदेश नहीं जाता।",
 };
 
 export function featureText(lang: Language, key: FeatureKey, vars?: Record<string, string | number>): string {
