@@ -23,7 +23,7 @@ export default async function ProfileSetupPage() {
   const t = createTranslator(lang);
 
   return (
-    <main className="min-h-dvh bg-[#f7faf9] px-4 py-8">
+    <main className="min-h-dvh bg-canvas px-4 py-8">
       <div className="mx-auto mb-5 flex w-full max-w-2xl items-center justify-between gap-3">
         <p className="font-semibold text-ink-900">{t("setup.stepLabel")}</p>
         <div className="flex flex-wrap items-center gap-2">

@@ -9,6 +9,8 @@ import { NAV_ITEMS } from "./nav-items";
 import { NAV_ICONS } from "./nav-icons";
 import { LanguageToggle } from "./language-toggle";
 import { AccessibilityToggle } from "./accessibility-toggle";
+import { ThemeToggle } from "./theme-toggle";
+import { EmergencyCallButton } from "@/components/emergency/emergency-call-button";
 import { ProfileSwitcher } from "./profile-switcher";
 import { useI18n } from "@/components/providers/i18n-provider";
 import { cn } from "@/lib/utils";
@@ -17,7 +19,7 @@ import { cn } from "@/lib/utils";
  * Sticky app header: profile switcher, language, accessibility and (on mobile)
  * a drawer that contains the sections the bottom bar cannot fit.
  */
-export function TopHeader({ userName }: { userName: string }) {
+export function TopHeader({ userName, emergencyNumber }: { userName: string; emergencyNumber: string }) {
   const { t } = useI18n();
   const [menuOpen, setMenuOpen] = React.useState(false);
   const pathname = usePathname();
@@ -36,7 +38,7 @@ export function TopHeader({ userName }: { userName: string }) {
   }, [menuOpen]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-ink-200 bg-white/95 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-ink-200 bg-surface/95 backdrop-blur">
       <div className="mx-auto flex w-full max-w-7xl items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-5">
         <Button
           variant="ghost"
@@ -62,13 +64,15 @@ export function TopHeader({ userName }: { userName: string }) {
         </p>
         <div className="flex-1 lg:hidden" />
 
+        <EmergencyCallButton number={emergencyNumber} compact size="sm" />
         <ProfileSwitcher />
         <LanguageToggle compact />
+        <ThemeToggle />
         <AccessibilityToggle />
       </div>
 
       {menuOpen && (
-        <div id="app-menu" className="border-t border-ink-200 bg-white lg:hidden">
+        <div id="app-menu" className="border-t border-ink-200 bg-surface lg:hidden">
           <nav aria-label={t("nav.primary")} className="mx-auto max-w-7xl px-3 py-3">
             <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
               {NAV_ITEMS.map((item) => {

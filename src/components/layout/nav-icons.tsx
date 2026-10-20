@@ -1,5 +1,7 @@
 import {
   Bot,
+  CalendarDays,
+  LifeBuoy,
   Clock,
   FolderOpen,
   Home,
@@ -25,4 +27,6 @@ export const NAV_ICONS: Record<string, React.ComponentType<{ className?: string;
   clock: Clock,
   users: Users,
   settings: Settings,
+  lifebuoy: LifeBuoy,
+  calendar: CalendarDays,
 };

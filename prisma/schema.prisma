@@ -140,6 +140,9 @@ model HealthProfile {
   metrics     HealthMetric[]
   labResults  LabResult[]
   chatMessages ChatMessage[]
+  emergencyContacts EmergencyContact[]
+  emergencyCard     EmergencyCard?
+  careTasks         CareTask[]
 
   @@index([userId])
   @@map("health_profiles")
@@ -314,4 +317,100 @@ model DrugInteraction {
   createdAt DateTime @default(now())
 
   @@map("drug_interactions")
+}
+
+/// Emergency contact for one health profile. Phone numbers are stored in E.164
+/// form. `verificationStatus` is VERIFIED only after a successful OTP check
+/// through the server-side provider — format validity never sets it.
+model EmergencyContact {
+  id           String        @id @default(cuid())
+  profileId    String
+  profile      HealthProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  name               String
+  relationship       String  @default("OTHER") // FAMILY | FRIEND | DOCTOR | NEIGHBOUR | OTHER
+  phoneE164          String
+  priority           Int     @default(1) // 1 = call first
+  preferredMethod    String  @default("CALL") // CALL | SMS | WHATSAPP
+  verificationStatus String  @default("UNVERIFIED") // UNVERIFIED | PENDING | VERIFIED
+  verifiedAt         DateTime?
+  consentEmergencyInfo Boolean @default(false) // contact may receive emergency info
+  consentLocation      Boolean @default(false) // contact may receive a location the user chooses to share
+  notes              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  verifications ContactVerification[]
+
+  @@index([profileId, priority])
+  @@map("emergency_contacts")
+}
+
+/// One OTP verification attempt. The code itself is held by the provider; only
+/// the provider's request reference and timestamps are stored here.
+model ContactVerification {
+  id         String           @id @default(cuid())
+  contactId  String
+  contact    EmergencyContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  provider   String // e.g. "twilio-verify"
+  providerRef String?
+  status     String  @default("PENDING") // PENDING | APPROVED | FAILED | EXPIRED
+  attempts   Int     @default(0)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([contactId, createdAt])
+  @@map("contact_verifications")
+}
+
+/// Emergency card fields for one profile. Every value records its provenance:
+/// blood group and allergies are user-entered (self-reported) unless a verified
+/// source exists — none exists in this build.
+model EmergencyCard {
+  id        String        @id @default(cuid())
+  profileId String        @unique
+  profile   HealthProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  bloodGroup        String?
+  bloodGroupSource  String @default("NONE") // NONE | USER_ENTERED
+  allergies         String? // free text, user-entered
+  conditions        String? // free text, user-entered
+  notes             String? // free text, user-entered
+  shareBloodGroup   Boolean @default(false)
+  shareAllergies    Boolean @default(false)
+  shareConditions   Boolean @default(false)
+  shareMedicines    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("emergency_cards")
+}
+
+/// Preventive-care task. Dates are calendar dates (YYYY-MM-DD) in the user's
+/// local time; no timezone conversion is applied. Parikshan never creates
+/// screening schedules itself: `source` records who entered the task.
+model CareTask {
+  id           String        @id @default(cuid())
+  profileId    String
+  profile      HealthProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  title        String
+  category     String  @default("GENERAL") // GENERAL | SCREENING | VACCINATION | CHECKUP | FOLLOW_UP | OTHER
+  source       String  @default("USER") // USER | CLINICIAN (entered as clinician-recommended, not verified)
+  clinicianName String?
+  dueDate      String  // YYYY-MM-DD
+  dueTime      String? // HH:mm, optional
+  status       String  @default("OPEN") // OPEN | DONE | CANCELLED
+  completedAt  DateTime?
+  recurrence   String  @default("NONE") // NONE | MONTHLY | EVERY_3_MONTHS | EVERY_6_MONTHS | YEARLY — only when set explicitly
+  reminderDaysBefore Int? // in-app "due soon" window; null = no reminder
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId, dueDate])
+  @@map("care_tasks")
 }

@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Toaster } from "sonner";
 import { I18nProvider, type Preferences } from "./i18n-provider";
+import { ThemeChoiceProvider } from "./theme-provider";
+import type { ThemeChoice } from "@/lib/theme/theme";
 
 /**
  * Providers available on every route, including the public landing and sign-in
@@ -14,11 +16,14 @@ import { I18nProvider, type Preferences } from "./i18n-provider";
 export function RootProviders({
   children,
   preferences,
+  themeChoice,
 }: {
   children: React.ReactNode;
   preferences: Preferences;
+  themeChoice: ThemeChoice;
 }) {
   return (
+    <ThemeChoiceProvider value={themeChoice}>
     <I18nProvider initialPreferences={preferences}>
       {children}
       <Toaster
@@ -29,5 +34,6 @@ export function RootProviders({
         }}
       />
     </I18nProvider>
+    </ThemeChoiceProvider>
   );
 }

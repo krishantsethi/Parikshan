@@ -23,6 +23,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/interactions", labelKey: "nav.interactions", icon: "shield", mobile: false },
   { href: "/timeline", labelKey: "nav.timeline", icon: "clock", mobile: false },
   { href: "/family", labelKey: "nav.family", icon: "users", mobile: false },
+  { href: "/emergency", labelKey: "nav.emergency", icon: "lifebuoy", mobile: false },
+  { href: "/care", labelKey: "nav.care", icon: "calendar", mobile: false },
   { href: "/settings", labelKey: "nav.settings", icon: "settings", mobile: false },
 ];
 

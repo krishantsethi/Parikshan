@@ -459,7 +459,7 @@ export function RecordReview({
                   id="meta-type"
                   name="type"
                   defaultValue={record.type}
-                  className="min-h-[var(--a11y-tap)] w-full rounded-xl border border-ink-200 bg-white px-3 text-base"
+                  className="min-h-[var(--a11y-tap)] w-full rounded-xl border border-ink-200 bg-surface px-3 text-base"
                 >
                   {RECORD_TYPES.map((type) => (
                     <option key={type} value={type}>

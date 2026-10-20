@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LanguageToggle } from "@/components/layout/language-toggle";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { getCurrentUser } from "@/lib/auth/session";
 import { createTranslator } from "@/lib/i18n";
 import { DEMO_ABHA_NUMBER } from "@/lib/demo/account";
@@ -46,14 +47,15 @@ export default async function LandingPage() {
   ] as const;
 
   return (
-    <div className="min-h-dvh bg-[#f7faf9]">
-      <header className="border-b border-ink-200 bg-white">
+    <div className="min-h-dvh bg-canvas">
+      <header className="border-b border-ink-200 bg-surface">
         <div className="mx-auto flex w-full max-w-7xl items-center gap-3 px-4 py-3 sm:px-6">
           <span aria-hidden="true" className="flex size-10 items-center justify-center rounded-2xl bg-brand-600 text-xl text-white">
             ❤
           </span>
           <span className="flex-1 font-semibold text-ink-900">{t("common.appName")}</span>
           <LanguageToggle />
+          <ThemeToggle />
           <Button asChild variant="secondary">
             <Link href="/login">{t("auth.continue")}</Link>
           </Button>
@@ -178,7 +180,7 @@ export default async function LandingPage() {
           <ol className="mt-6 grid gap-4 md:grid-cols-3">
             {steps.map((step, index) => (
               <li key={step.titleKey}>
-                <Card className="h-full bg-white/70">
+                <Card className="h-full bg-surface/70">
                   <CardContent className="space-y-3">
                     <span
                       aria-hidden="true"
@@ -196,7 +198,7 @@ export default async function LandingPage() {
         </section>
 
         {/* Accessibility */}
-        <section aria-labelledby="a11y-heading" className="mt-8 rounded-[2rem] border border-brand-100 bg-white p-6 sm:p-8">
+        <section aria-labelledby="a11y-heading" className="mt-8 rounded-[2rem] border border-brand-100 bg-surface p-6 sm:p-8">
           <div className="max-w-2xl">
             <h2 id="a11y-heading" className="text-2xl font-semibold text-ink-900 sm:text-3xl">
               {t("landing.a11yTitle")}

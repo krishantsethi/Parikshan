@@ -72,7 +72,7 @@ export function ProfileSetupForm({
                   aria-label={`${t("setup.avatar")}: ${emoji}`}
                   className={cn(
                     "flex size-[var(--a11y-tap)] items-center justify-center rounded-2xl border text-2xl transition-colors",
-                    avatar === emoji ? "border-brand-500 bg-brand-50 ring-2 ring-brand-200" : "border-ink-200 bg-white hover:bg-ink-50",
+                    avatar === emoji ? "border-brand-500 bg-brand-50 ring-2 ring-brand-200" : "border-ink-200 bg-surface hover:bg-ink-50",
                   )}
                 >
                   <span aria-hidden="true">{emoji}</span>
@@ -99,7 +99,7 @@ export function ProfileSetupForm({
                 id="setup-kind"
                 name="kind"
                 defaultValue={initialKind}
-                className="min-h-[var(--a11y-tap)] w-full rounded-xl border border-ink-200 bg-white px-3 text-base"
+                className="min-h-[var(--a11y-tap)] w-full rounded-xl border border-ink-200 bg-surface px-3 text-base"
               >
                 <option value="ADULT">{t("family.kindAdult")}</option>
                 <option value="CHILD">{t("family.kindChild")}</option>
@@ -119,7 +119,7 @@ export function ProfileSetupForm({
                   aria-pressed={bloodGroup === group}
                   className={cn(
                     "min-h-[var(--a11y-tap)] rounded-xl border px-4 font-medium transition-colors",
-                    bloodGroup === group ? "border-brand-500 bg-brand-50 text-brand-700" : "border-ink-200 bg-white text-ink-700 hover:bg-ink-50",
+                    bloodGroup === group ? "border-brand-500 bg-brand-50 text-brand-700" : "border-ink-200 bg-surface text-ink-700 hover:bg-ink-50",
                   )}
                 >
                   {group}

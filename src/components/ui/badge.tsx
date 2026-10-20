@@ -13,7 +13,7 @@ const badgeVariants = cva(
         watch: "border-watch-100 bg-watch-50 text-watch-700",
         alert: "border-alert-100 bg-alert-50 text-alert-700",
         info: "border-info-100 bg-info-50 text-info-700",
-        outline: "border-ink-300 bg-white text-ink-700",
+        outline: "border-ink-300 bg-surface text-ink-700",
       },
       size: {
         default: "text-xs",
