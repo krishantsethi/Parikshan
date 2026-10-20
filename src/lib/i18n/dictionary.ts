@@ -74,6 +74,12 @@ const en = {
 
   // ── Navigation ───────────────────────────────────────────────────────────
   "nav.dashboard": "Dashboard",
+  "nav.emergency": "Emergency help",
+  "nav.care": "Care calendar",
+  "theme.label": "Theme",
+  "theme.light": "Light",
+  "theme.dark": "Dark",
+  "theme.system": "Match device",
   "nav.upload": "Upload Records",
   "nav.assistant": "AI Health Assistant",
   "nav.trends": "Health Trends",
@@ -1007,6 +1013,12 @@ const hi: TranslationDict = {
 
   // ── Navigation ───────────────────────────────────────────────────────────
   "nav.dashboard": "डैशबोर्ड",
+  "nav.emergency": "आपातकालीन सहायता",
+  "nav.care": "देखभाल कैलेंडर",
+  "theme.label": "थीम",
+  "theme.light": "हल्की",
+  "theme.dark": "गहरी",
+  "theme.system": "डिवाइस के अनुसार",
   "nav.upload": "रिकॉर्ड अपलोड करें",
   "nav.assistant": "एआई स्वास्थ्य सहायक",
   "nav.trends": "स्वास्थ्य रुझान",

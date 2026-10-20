@@ -1,5 +1,6 @@
 import { ActiveProfileProvider } from "@/components/providers/profile-provider";
 import { AppShell } from "@/components/layout/app-shell";
+import { getEmergencyNumber } from "@/lib/safety/emergency-number";
 import { requireUser } from "@/lib/auth/session";
 import { getActiveProfile, listProfiles } from "@/lib/auth/guards";
 import type { ProfileKind } from "@/types/domain";
@@ -37,6 +38,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     >
       <AppShell
         userName={user.name}
+        emergencyNumber={getEmergencyNumber()}
         profileKind={activeProfile.kind as ProfileKind}
       >
         {children}

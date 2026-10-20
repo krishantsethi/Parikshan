@@ -197,7 +197,7 @@ export function MedicationManager({
         </ul>
       )}
 
-      <Card className="border-dashed bg-white">
+      <Card className="border-dashed bg-surface">
         <CardContent className="text-sm text-muted">
           <p>{t("safety.noPrescribing")}</p>
           <p className="mt-1">{t("meds.reminderHint")}</p>

@@ -58,11 +58,13 @@ export function VoiceAssistant({
   onAsk,
   onSwitchToText,
   autoSpeak,
+  onStatusChange,
 }: {
   config: VoicePublicConfig;
   onAsk: (question: string) => Promise<VoiceAnswer | null>;
   onSwitchToText: () => void;
   autoSpeak: boolean;
+  onStatusChange?: (status: VoiceStatus) => void;
 }) {
   const { t, lang } = useI18n();
   const voice = useVoiceAssistant({
@@ -103,6 +105,10 @@ export function VoiceAssistant({
       : t(STATUS_KEY[status]);
 
   const busy = status === "requesting-permission" || status === "processing";
+
+  React.useEffect(() => {
+    onStatusChange?.(status);
+  }, [status, onStatusChange]);
 
   const primary = () => {
     switch (status) {
@@ -151,7 +157,7 @@ export function VoiceAssistant({
                   ? "animate-pulse bg-alert-100 text-alert-700"
                   : status === "speaking"
                     ? "bg-brand-100 text-brand-700"
-                    : "bg-white text-brand-700 ring-1 ring-brand-200",
+                    : "bg-surface text-brand-700 ring-1 ring-brand-200",
               )}
             >
               {busy ? <Loader2 className="size-5 animate-spin" /> : <Mic className="size-5" />}
@@ -185,7 +191,7 @@ export function VoiceAssistant({
       </div>
 
       {/* Transcript */}
-      <div className="mt-3 rounded-2xl border border-ink-200 bg-white p-3">
+      <div className="mt-3 rounded-2xl border border-ink-200 bg-surface p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">
           {status === "listening" ? t("voice.interim") : t("voice.transcript")}
         </p>
@@ -335,7 +341,7 @@ export function VoiceAssistant({
       )}
 
       {/* Privacy / retention */}
-      <details className="mt-3 rounded-xl border border-ink-200 bg-white p-3 text-sm">
+      <details className="mt-3 rounded-xl border border-ink-200 bg-surface p-3 text-sm">
         <summary className="cursor-pointer font-medium text-ink-800">
           {t("voice.privacyTitle")}
         </summary>

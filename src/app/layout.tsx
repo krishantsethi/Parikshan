@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { RootProviders } from "@/components/providers/root-providers";
+import { cookies } from "next/headers";
+import { NO_FLASH_THEME_SCRIPT, THEME_COOKIE, parseThemeChoice, serverThemeClass } from "@/lib/theme/theme";
 import { getCurrentUser } from "@/lib/auth/session";
 import type { Preferences } from "@/components/providers/i18n-provider";
 
@@ -48,6 +50,7 @@ const DEFAULT_PREFERENCES: Preferences = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
+  const themeChoice = parseThemeChoice((await cookies()).get(THEME_COOKIE)?.value);
   const preferences: Preferences = user?.preferences
     ? {
         language: user.preferences.language === "hi" ? "hi" : "en",
@@ -70,9 +73,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     .join(" ");
 
   return (
-    <html lang={preferences.language} className={htmlClasses}>
+    <html lang={preferences.language} className={[htmlClasses, serverThemeClass(themeChoice)].filter(Boolean).join(" ")} suppressHydrationWarning>
+      <head>
+        {/* Runs before first paint: applies the saved/OS theme with no flash. */}
+        <script dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME_SCRIPT }} />
+      </head>
       <body className="min-h-dvh antialiased">
-        <RootProviders preferences={preferences}>{children}</RootProviders>
+        <RootProviders preferences={preferences} themeChoice={themeChoice}>{children}</RootProviders>
       </body>
     </html>
   );

@@ -1,6 +1,9 @@
 "use client";
 
 import * as React from "react";
+import type { VoiceStatus } from "@/lib/voice/use-voice-assistant";
+import { AssistantMascot, type MascotState } from "@/components/assistant/assistant-mascot";
+import { featureText } from "@/lib/i18n/features";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -86,6 +89,8 @@ export function AIChat({
   const [isSending, setIsSending] = React.useState(false);
   const [voiceOpen, setVoiceOpen] = React.useState(false);
   const [voiceKey, setVoiceKey] = React.useState(0);
+  const [voiceStatus, setVoiceStatus] = React.useState<VoiceStatus>("idle");
+  const handleVoiceStatus = React.useCallback((status: VoiceStatus) => setVoiceStatus(status), []);
   const listRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -178,9 +183,24 @@ export function AIChat({
     window.requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
+  const lastMessage = messages[messages.length - 1];
+  const mascotState: MascotState =
+    voiceStatus === "listening" || voiceStatus === "requesting-permission"
+      ? "listening"
+      : voiceStatus === "speaking"
+        ? "speaking"
+        : isSending || voiceStatus === "processing"
+          ? "thinking"
+          : voiceStatus === "error" || voiceStatus === "permission-denied" || lastMessage?.error === true
+            ? "error"
+            : "idle";
+
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <Card className="flex min-h-[32rem] flex-col overflow-hidden">
+        <div className="border-b border-ink-200 px-4 py-3 sm:px-5">
+          <AssistantMascot state={mascotState} compact />
+        </div>
         <div
           ref={listRef}
           className="flex-1 space-y-4 overflow-y-auto p-4 scrollbar-thin sm:p-5"
@@ -221,11 +241,13 @@ export function AIChat({
             config={voiceConfig}
             onAsk={(question) => send(question, "voice")}
             onSwitchToText={switchToText}
-            autoSpeak={prefs.readAloud}
+            // Answers are never read aloud automatically; playback starts only from the user’s button.
+            autoSpeak={false}
+            onStatusChange={handleVoiceStatus}
           />
         )}
 
-        <div className="border-t border-ink-200 bg-white p-3 sm:p-4">
+        <div className="border-t border-ink-200 bg-surface p-3 sm:p-4">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -296,6 +318,15 @@ export function AIChat({
       </Card>
 
       <aside className="space-y-4">
+        <Card>
+          <CardContent className="space-y-2 text-sm">
+            <h2 className="font-semibold text-ink-900">{featureText(lang, "mascot.provenanceTitle")}</h2>
+            <p className="rounded-lg bg-brand-50 px-2.5 py-1.5 text-ink-800">{featureText(lang, "mascot.provExtracted")}</p>
+            <p className="rounded-lg bg-info-50 px-2.5 py-1.5 text-ink-800">{featureText(lang, "mascot.provAi")}</p>
+            <p className="rounded-lg bg-watch-50 px-2.5 py-1.5 text-ink-800">{featureText(lang, "mascot.provClinician")}</p>
+            <p className="text-xs text-muted">{featureText(lang, "mascot.notDiagnosis")}</p>
+          </CardContent>
+        </Card>
         <Card>
           <CardContent className="space-y-3">
             <h2 className="flex items-center gap-2 font-semibold text-ink-900">
@@ -408,7 +439,7 @@ function MessageBubble({ message }: { message: ChatMessageView }) {
             message.role === "user"
               ? "bg-brand-600 text-white"
               : message.grounded
-                ? "border border-ink-200 bg-white text-ink-800"
+                ? "border border-ink-200 bg-surface text-ink-800"
                 : "border border-watch-100 bg-watch-50 text-ink-800",
           )}
         >
@@ -465,7 +496,7 @@ function MessageBubble({ message }: { message: ChatMessageView }) {
 function SourceCard({ source }: { source: ChatSource }) {
   const { t, lang } = useI18n();
   return (
-    <div className="rounded-xl border border-ink-200 bg-white px-2.5 py-2">
+    <div className="rounded-xl border border-ink-200 bg-surface px-2.5 py-2">
       <Link
         href={`/records/${source.recordId}`}
         className="text-xs font-medium text-brand-700 underline underline-offset-4 hover:text-brand-800"

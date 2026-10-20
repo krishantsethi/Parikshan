@@ -57,6 +57,14 @@
   --color-ink-800: #1e293b;
   --color-ink-900: #0f172a;
 
+  /* Surfaces — remapped for dark mode (replaces hard-coded white / page tint) */
+  --color-surface: #ffffff;
+  --color-canvas: #f7faf9;
+  --color-chart-grid: #e6ebf1;
+  --color-chart-primary: #15816f;
+  --color-chart-accent: #2563eb;
+  --color-chart-point: #22a189;
+
   --radius-card: 1.25rem;
   --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.04),
     0 8px 24px -12px rgba(15, 23, 42, 0.12);
@@ -66,6 +74,8 @@
   --animate-fade-in: fade-in 0.35s ease-out both;
   --animate-slide-up: slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-pulse-ring: pulse-ring 1.8s ease-out infinite;
+  --animate-blink: blink 4s infinite;
+  --animate-talk: talk 0.5s ease-in-out infinite;
 }
 
 @keyframes fade-in {
@@ -76,10 +86,100 @@
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes blink {
+  0%, 46%, 54%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.1); }
+}
+@keyframes talk {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(2.2); }
+}
 @keyframes pulse-ring {
   0% { transform: scale(0.9); opacity: 0.7; }
   70% { transform: scale(1.6); opacity: 0; }
   100% { transform: scale(1.6); opacity: 0; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Dark theme. Applied by the `dark` class on <html> (see theme-toggle.tsx and
+   the no-flash script in app/layout.tsx). Every colour in the app is a token,
+   so remapping tokens here re-skins dialogs, charts, the assistant, etc.
+   Text/background pairs keep WCAG AA contrast (≥4.5:1 for body text).
+   ══════════════════════════════════════════════════════════════════════════ */
+.dark {
+  color-scheme: dark;
+
+  --color-surface: #131c2e;
+  --color-canvas: #0b1220;
+  --color-chart-grid: #2a3850;
+  --color-chart-primary: #4cc2aa;
+  --color-chart-accent: #60a5fa;
+  --color-chart-point: #34b89f;
+
+  --color-brand-50: #0f2e2a;
+  --color-brand-100: #14403a;
+  --color-brand-200: #1b5a50;
+  --color-brand-300: #3fb39c;
+  --color-brand-400: #4cc2aa;
+  --color-brand-500: #5fd0b8;
+  --color-brand-600: #1f8f7a;
+  --color-brand-700: #1a7a68;
+  --color-brand-800: #a7f0df;
+  --color-brand-900: #d5f5ec;
+
+  --color-info-50: #0f1f3d;
+  --color-info-100: #14284f;
+  --color-info-500: #60a5fa;
+  --color-info-600: #60a5fa;
+  --color-info-700: #93c5fd;
+
+  --color-good-50: #0d2a1f;
+  --color-good-100: #134432;
+  --color-good-600: #34d399;
+  --color-good-700: #6ee7b7;
+
+  --color-watch-50: #2b2108;
+  --color-watch-100: #3d2e0c;
+  --color-watch-600: #fbbf24;
+  --color-watch-700: #fcd34d;
+  --color-watch-800: #fde68a;
+
+  --color-alert-50: #2d1116;
+  --color-alert-100: #471a22;
+  --color-alert-600: #fb7185;
+  --color-alert-700: #fda4af;
+
+  --color-ink-50: #172135;
+  --color-ink-100: #1d2a40;
+  --color-ink-200: #2a3850;
+  --color-ink-300: #3b4a64;
+  --color-ink-400: #64748b;
+  --color-ink-500: #9aa8bc;
+  --color-ink-600: #aab6c8;
+  --color-ink-700: #cbd5e1;
+  --color-ink-800: #e2e8f0;
+  --color-ink-900: #f8fafc;
+}
+
+.dark body {
+  background-color: var(--color-canvas);
+}
+
+/* Solid brand buttons keep white text; only the pressed state needs a tweak */
+.dark .bg-brand-600:active {
+  background-color: #15665a;
+}
+
+/* Native form controls and scrollbars follow the theme */
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: var(--color-ink-500);
+}
+
+/* Ensure the focus ring stays visible on dark surfaces */
+.dark :focus-visible {
+  outline-color: #5fd0b8;
 }
 
 /* ── Base ─────────────────────────────────────────────────────────────── */
@@ -102,7 +202,7 @@
   body {
     font-size: calc(1rem * var(--a11y-scale));
     line-height: var(--a11y-line-height);
-    background-color: #f7faf9;
+    background-color: var(--color-canvas);
     color: var(--color-ink-800);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;

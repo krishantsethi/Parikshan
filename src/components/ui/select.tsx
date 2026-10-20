@@ -16,7 +16,7 @@ const SelectTrigger = React.forwardRef<
     ref={ref}
     data-slot="input"
     className={cn(
-      "flex min-h-[var(--a11y-tap)] w-full items-center justify-between gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2 text-base text-ink-900",
+      "flex min-h-[var(--a11y-tap)] w-full items-center justify-between gap-2 rounded-xl border border-ink-200 bg-surface px-4 py-2 text-base text-ink-900",
       "hover:bg-ink-50 focus-visible:outline-3 focus-visible:outline-offset-1 focus-visible:outline-brand-500 disabled:opacity-60",
       className,
     )}
@@ -39,7 +39,7 @@ const SelectContent = React.forwardRef<
       ref={ref}
       position={position}
       className={cn(
-        "relative z-50 max-h-72 min-w-[10rem] overflow-hidden rounded-xl border border-ink-200 bg-white shadow-[var(--shadow-lift)]",
+        "relative z-50 max-h-72 min-w-[10rem] overflow-hidden rounded-xl border border-ink-200 bg-surface shadow-[var(--shadow-lift)]",
         position === "popper" && "data-[side=bottom]:translate-y-1 data-[side=top]:-translate-y-1",
         className,
       )}

@@ -76,14 +76,14 @@ export function TrendChart({
     <div style={{ width: "100%", height }} role="img" aria-label={t("trends.chartAria", { metric: label })}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 12, right: 12, bottom: 4, left: -12 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e6ebf1" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-chart-grid)" vertical={false} />
           <XAxis dataKey="label" tickLine={false} axisLine={false} minTickGap={16} />
           <YAxis domain={domain} tickLine={false} axisLine={false} width={52} />
           {range && Number.isFinite(range.low) && Number.isFinite(range.high) && (
             <ReferenceArea
               y1={range.low}
               y2={range.high}
-              fill="#22a189"
+              fill="var(--color-chart-point)"
               fillOpacity={0.07}
               stroke="none"
               ifOverflow="extendDomain"
@@ -92,7 +92,9 @@ export function TrendChart({
           <Tooltip
             contentStyle={{
               borderRadius: "0.9rem",
-              border: "1px solid #e6ebf1",
+              backgroundColor: "var(--color-surface)",
+              color: "var(--color-ink-800)",
+              border: "1px solid var(--color-chart-grid)",
               boxShadow: "0 12px 30px -18px rgba(15,23,42,0.35)",
               fontSize: "0.9rem",
             }}
@@ -102,9 +104,9 @@ export function TrendChart({
             type="monotone"
             dataKey="value"
             name={label}
-            stroke="#15816f"
+            stroke="var(--color-chart-primary)"
             strokeWidth={3}
-            dot={{ r: 4, fill: "#15816f", strokeWidth: 0 }}
+            dot={{ r: 4, fill: "var(--color-chart-primary)", strokeWidth: 0 }}
             activeDot={{ r: 6 }}
             connectNulls
           />
@@ -113,10 +115,10 @@ export function TrendChart({
               type="monotone"
               dataKey="value2"
               name={series2Name ?? "—"}
-              stroke="#2563eb"
+              stroke="var(--color-chart-accent)"
               strokeWidth={2.5}
               strokeDasharray="5 4"
-              dot={{ r: 3.5, fill: "#2563eb", strokeWidth: 0 }}
+              dot={{ r: 3.5, fill: "var(--color-chart-accent)", strokeWidth: 0 }}
               connectNulls
             />
           )}

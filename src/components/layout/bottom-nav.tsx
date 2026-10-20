@@ -20,7 +20,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label={t("nav.primary")}
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-ink-200 bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <ul className="mx-auto flex max-w-7xl">
         {MOBILE_NAV_ITEMS.map((item) => {

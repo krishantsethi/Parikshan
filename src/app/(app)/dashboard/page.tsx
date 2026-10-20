@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight, Bot, Upload } from "lucide-react";
+import { ArrowRight, Bot, CalendarDays, LifeBuoy, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -99,6 +99,18 @@ export default async function DashboardPage() {
               <Link href="/assistant">
                 <Bot aria-hidden="true" />
                 {t("nav.assistant")}
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/care">
+                <CalendarDays aria-hidden="true" />
+                {t("nav.care")}
+              </Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/emergency">
+                <LifeBuoy aria-hidden="true" />
+                {t("nav.emergency")}
               </Link>
             </Button>
           </div>

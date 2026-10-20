@@ -13,7 +13,7 @@ export default function NotFound() {
   const t = createTranslator("en");
 
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-[#f7faf9] px-4">
+    <main className="flex min-h-dvh items-center justify-center bg-canvas px-4">
       <Card className="max-w-xl">
         <CardContent className="space-y-4 text-center">
           <p className="text-4xl" aria-hidden="true">

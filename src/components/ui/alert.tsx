@@ -10,7 +10,7 @@ const alertVariants = cva("flex w-full gap-3 rounded-2xl border p-4 text-sm lead
       good: "border-good-100 bg-good-50 text-ink-800",
       watch: "border-watch-100 bg-watch-50 text-ink-800",
       alert: "border-alert-100 bg-alert-50 text-ink-800",
-      neutral: "border-ink-200 bg-white text-ink-700",
+      neutral: "border-ink-200 bg-surface text-ink-700",
     },
   },
   defaultVariants: { variant: "info" },

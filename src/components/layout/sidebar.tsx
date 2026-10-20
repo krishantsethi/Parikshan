@@ -17,7 +17,7 @@ export function Sidebar() {
 
   return (
     <aside
-      className="sticky top-0 hidden h-dvh w-64 shrink-0 border-r border-ink-200 bg-white lg:flex lg:flex-col"
+      className="sticky top-0 hidden h-dvh w-64 shrink-0 border-r border-ink-200 bg-surface lg:flex lg:flex-col"
       aria-label={t("nav.primary")}
     >
       <Link href="/dashboard" className="flex items-center gap-3 px-5 py-4">

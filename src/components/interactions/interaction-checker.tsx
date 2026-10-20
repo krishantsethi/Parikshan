@@ -180,7 +180,7 @@ export function InteractionChecker({
                       <SeverityPill severity={finding.severity} />
                     </div>
                     <p className="mt-2 text-base leading-relaxed text-ink-800">{finding.description}</p>
-                    <div className="mt-3 rounded-xl bg-white/70 p-3">
+                    <div className="mt-3 rounded-xl bg-surface/70 p-3">
                       <p className="text-sm font-semibold text-ink-900">{t("interactions.action")}</p>
                       <p className="text-sm text-ink-700">{finding.action}</p>
                     </div>

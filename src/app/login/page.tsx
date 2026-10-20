@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/session";
 import { AuthPanel } from "@/components/auth/auth-panel";
 import { LanguageToggle } from "@/components/layout/language-toggle";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { createTranslator } from "@/lib/i18n";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -21,7 +22,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const t = createTranslator("en");
 
   return (
-    <main className="min-h-dvh bg-[#f7faf9] px-4 py-8 sm:px-6">
+    <main className="min-h-dvh bg-canvas px-4 py-8 sm:px-6">
       <div className="mx-auto mb-6 flex w-full max-w-5xl items-center gap-3">
         <span aria-hidden="true" className="flex size-10 items-center justify-center rounded-2xl bg-brand-600 text-xl text-white">
           ❤
@@ -31,6 +32,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <span className="block text-sm text-muted">{t("common.tagline")}</span>
         </span>
         <LanguageToggle />
+          <ThemeToggle />
       </div>
       <div className="mx-auto w-full max-w-5xl">
         <AuthPanel demoFocus={params.demo === "1"} />

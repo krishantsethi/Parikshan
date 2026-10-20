@@ -111,7 +111,7 @@ export function TimelineExplorer({ entries }: { entries: TimelineEntry[] }) {
                 id="timeline-type"
                 value={type}
                 onChange={(event) => setType(event.target.value)}
-                className="min-h-[var(--a11y-tap)] w-full appearance-none rounded-xl border border-ink-200 bg-white pl-10 pr-4 text-base text-ink-900 focus-visible:outline-3 focus-visible:outline-brand-500"
+                className="min-h-[var(--a11y-tap)] w-full appearance-none rounded-xl border border-ink-200 bg-surface pl-10 pr-4 text-base text-ink-900 focus-visible:outline-3 focus-visible:outline-brand-500"
               >
                 <option value="ALL">{t("common.all")}</option>
                 {RECORD_TYPES.map((recordType) => (

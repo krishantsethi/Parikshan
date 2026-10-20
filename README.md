@@ -313,6 +313,14 @@ Reading is equally narrow — pages call typed helpers in `src/lib/database/quer
 
 ---
 
+## Emergency help, care calendar and dark theme
+
+Three additions to the Personal Health Copilot. Full details, endpoints, the manual test guide and the legal-review list are in [`docs/emergency-and-care.md`](docs/emergency-and-care.md).
+
+- **Dark theme** — Light / Dark / Match device, from the header. The choice is kept in the `phc_theme` cookie and applied before first paint.
+- **Emergency help** (`/emergency`) — "Emergency Help — Call 112" in the header and on the emergency page. It opens a confirmation dialog and only then a `tel:` link. The site never places or confirms a call. It also covers emergency contacts (phone verification needs a server-side provider), an emergency card with field-level sharing, location messages prepared on request, a readiness check, and a TEST MODE rehearsal that makes no calls or messages.
+- **Care calendar** (`/care`) — preventive-care tasks you or your clinician enter. Nothing is scheduled automatically. Repeats happen only when you choose them. Reminders are in-app only.
+
 ## Voice assistant
 
 `/assistant` adds a microphone button beside the text box. Opening the panel does **not** request the

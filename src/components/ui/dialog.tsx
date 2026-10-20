@@ -18,7 +18,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-ink-200 bg-white p-6 shadow-[var(--shadow-lift)]",
+        "fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-ink-200 bg-surface p-6 shadow-[var(--shadow-lift)]",
         "data-[state=open]:animate-[slide-up_0.25s_ease-out]",
         className,
       )}
